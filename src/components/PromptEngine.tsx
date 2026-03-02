@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Zap, 
@@ -14,7 +14,8 @@ import {
 import { generateSmartPrompt, generateImprovementQuestion, refinePrompt, type ImprovementQuestion } from '../services/gemini';
 import { cn } from '../utils/cn';
 
-const MAX_FREE_TRIES = 2;
+const MAX_FREE_TRIES = 3;
+const MAX_REFINE_TRIES = 1;
 
 export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: { 
   onUpgrade: () => void, 
@@ -28,6 +29,12 @@ export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [refineUsageCount, setRefineUsageCount] = useState(0);
+
+  useEffect(() => {
+    const rCount = localStorage.getItem('refine_usage_count');
+    if (rCount) setRefineUsageCount(parseInt(rCount, 10));
+  }, []);
 
   const handleGenerate = async () => {
     if (!lazyPrompt.trim()) return;
@@ -60,6 +67,11 @@ export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: {
   const handleRefine = async (refinement: string) => {
     const finalRefinement = refinement || manualRefinement;
     if (!finalRefinement.trim() || isRefining) return;
+
+    if (refineUsageCount >= MAX_REFINE_TRIES) {
+      onUpgrade();
+      return;
+    }
     
     setIsRefining(true);
     try {
@@ -69,6 +81,10 @@ export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: {
       
       const data = await generateImprovementQuestion(lazyPrompt, refined);
       setImprovementData(data);
+
+      const newCount = refineUsageCount + 1;
+      setRefineUsageCount(newCount);
+      localStorage.setItem('refine_usage_count', newCount.toString());
     } catch (error) {
       console.error(error);
       alert('Failed to refine prompt.');
@@ -82,6 +98,9 @@ export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const remainingPrompts = MAX_FREE_TRIES - usageCount;
+  const remainingRefines = MAX_REFINE_TRIES - refineUsageCount;
 
   return (
     <div className="space-y-12">
@@ -120,19 +139,24 @@ export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: {
               <Cpu className="w-4 h-4" />
               AI Engine: Gemini 1.5 Flash
             </div>
-            <button
-              onClick={handleGenerate}
-              disabled={isLoading || !lazyPrompt.trim()}
-              className={cn(
-                "flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all neo-shadow",
-                isLoading || !lazyPrompt.trim() 
-                  ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
-                  : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950"
-              )}
-            >
-              {isLoading ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
-              {isLoading ? "Processing..." : "Generate Smart Prompt"}
-            </button>
+            <div className="flex items-center gap-4">
+                <div className="bg-zinc-800 text-emerald-400 font-bold text-xs px-3 py-1.5 rounded-full">
+                  {remainingPrompts > 0 ? `Limit: ${remainingPrompts}x` : "Limit Reached"}
+                </div>
+                <button
+                  onClick={handleGenerate}
+                  disabled={isLoading || !lazyPrompt.trim()}
+                  className={cn(
+                    "flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all neo-shadow",
+                    isLoading || !lazyPrompt.trim() 
+                      ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
+                      : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950"
+                  )}
+                >
+                  {isLoading ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
+                  {isLoading ? "Processing..." : "Generate Smart Prompt"}
+                </button>
+            </div>
           </div>
         </motion.div>
 
@@ -190,11 +214,16 @@ export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: {
             animate={{ opacity: 1, y: 0 }}
             className="glass rounded-2xl p-6 sm:p-8 relative overflow-hidden"
           >
-            <div className="flex items-center gap-2 mb-6">
-              <div className="p-2 bg-zinc-800 rounded-lg">
-                <Zap className="w-5 h-5 text-emerald-400" />
-              </div>
-              <h2 className="font-display font-bold text-xl">Improve Prompt</h2>
+            <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                    <div className="p-2 bg-zinc-800 rounded-lg">
+                        <Zap className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <h2 className="font-display font-bold text-xl">Improve Prompt</h2>
+                </div>
+                <div className="bg-zinc-800 text-emerald-400 font-bold text-xs px-3 py-1.5 rounded-full">
+                  {remainingRefines > 0 ? `${remainingRefines}x Free Trial` : "Limit Reached"}
+                </div>
             </div>
             
             <div className="space-y-6">
@@ -205,8 +234,8 @@ export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: {
                     <button
                       key={index}
                       onClick={() => handleRefine(option)}
-                      disabled={isRefining}
-                      className="px-4 py-2 bg-white/5 hover:bg-emerald-500/10 border border-white/10 rounded-full text-xs text-zinc-400 hover:text-emerald-400"
+                      disabled={isRefining || remainingRefines <= 0}
+                      className="px-4 py-2 bg-white/5 hover:bg-emerald-500/10 border border-white/10 rounded-full text-xs text-zinc-400 hover:text-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {option}
                     </button>
@@ -219,9 +248,10 @@ export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: {
                     onChange={(e) => setManualRefinement(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRefine('')}
                     placeholder="Atau ketik jawaban manual..."
-                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl py-3 px-4 pr-12 text-sm text-zinc-200 outline-none"
+                    disabled={isRefining || remainingRefines <= 0}
+                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl py-3 px-4 pr-12 text-sm text-zinc-200 outline-none disabled:opacity-50"
                   />
-                  <button onClick={() => handleRefine('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-emerald-500">
+                  <button onClick={() => handleRefine('')} disabled={isRefining || remainingRefines <= 0} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-emerald-500 disabled:opacity-50">
                     <ArrowRight className="w-5 h-5" />
                   </button>
                 </div>

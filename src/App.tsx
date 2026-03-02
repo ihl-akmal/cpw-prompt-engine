@@ -18,15 +18,20 @@ export default function App() {
   const [currentView, setCurrentView] = useState<View>('prompt');
   const [showPricing, setShowPricing] = useState(false);
   const [promptUsage, setPromptUsage] = useState(0);
+  const [refineUsage, setRefineUsage] = useState(0);
 
   useEffect(() => {
     const pCount = localStorage.getItem('prompt_usage_count');
     if (pCount) setPromptUsage(parseInt(pCount, 10));
+    const rCount = localStorage.getItem('refine_usage_count');
+    if (rCount) setRefineUsage(parseInt(rCount, 10));
   }, []);
 
   const resetUsage = () => {
     setPromptUsage(0);
+    setRefineUsage(0);
     localStorage.setItem('prompt_usage_count', '0');
+    localStorage.setItem('refine_usage_count', '0');
     localStorage.setItem('brand_voice_usage_count', '0');
     setShowPricing(false);
   };
@@ -132,7 +137,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
             >
-              <BrandVoiceGenerator />
+              <BrandVoiceGenerator onUpgrade={() => setShowPricing(true)} />
             </motion.div>
           )}
         </AnimatePresence>
