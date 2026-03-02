@@ -251,7 +251,7 @@ export default function BrandVoiceGenerator({ onUpgrade }: { onUpgrade: () => vo
               />
             </div>
           </div>
-          <div className="flex items-center justify-end gap-4 mt-6">
+          <div className="mt-6 flex flex-wrap items-center justify-end gap-4">
             <div className="bg-zinc-800 text-emerald-400 font-bold text-xs px-3 py-1.5 rounded-full">
               {remainingTries > 0 ? `${remainingTries}x Free Trial` : "Limit Reached"}
             </div>
@@ -259,7 +259,7 @@ export default function BrandVoiceGenerator({ onUpgrade }: { onUpgrade: () => vo
               onClick={handleGenerate}
               disabled={isLoading || !brandName || !industry || !audience || selectedAdjectives.length === 0}
               className={cn(
-                "py-4 px-8 rounded-xl font-bold transition-all neo-shadow flex items-center justify-center gap-2",
+                "w-full sm:w-auto py-4 px-8 rounded-xl font-bold transition-all neo-shadow flex items-center justify-center gap-2",
                 isLoading || !brandName || !industry || !audience || selectedAdjectives.length === 0
                   ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
                   : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950"

@@ -134,29 +134,27 @@ export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: {
             className="w-full h-32 bg-zinc-900/50 border border-white/10 rounded-xl p-4 text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all resize-none font-mono text-sm"
           />
 
-          <div className="mt-6 flex items-center justify-between gap-4">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
             <div className="text-xs text-zinc-500 flex items-center gap-2">
               <Cpu className="w-4 h-4" />
               AI Engine: Gemini 1.5 Flash
             </div>
-            <div className="flex items-center gap-4">
-                <div className="bg-zinc-800 text-emerald-400 font-bold text-xs px-3 py-1.5 rounded-full">
-                  {remainingPrompts > 0 ? `Limit: ${remainingPrompts}x` : "Limit Reached"}
-                </div>
-                <button
-                  onClick={handleGenerate}
-                  disabled={isLoading || !lazyPrompt.trim()}
-                  className={cn(
-                    "flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all neo-shadow",
-                    isLoading || !lazyPrompt.trim() 
-                      ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
-                      : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950"
-                  )}
-                >
-                  {isLoading ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
-                  {isLoading ? "Processing..." : "Generate Smart Prompt"}
-                </button>
+            <div className="bg-zinc-800 text-emerald-400 font-bold text-xs px-3 py-1.5 rounded-full">
+              {remainingPrompts > 0 ? `Limit: ${remainingPrompts}x` : "Limit Reached"}
             </div>
+            <button
+              onClick={handleGenerate}
+              disabled={isLoading || !lazyPrompt.trim()}
+              className={cn(
+                "w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-all neo-shadow",
+                isLoading || !lazyPrompt.trim() 
+                  ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
+                  : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950"
+              )}
+            >
+              {isLoading ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
+              {isLoading ? "Processing..." : "Generate Smart Prompt"}
+            </button>
           </div>
         </motion.div>
 
