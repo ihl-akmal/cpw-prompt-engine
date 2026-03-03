@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { 
   Zap, 
   Layers,
@@ -7,14 +7,14 @@ import {
   RefreshCcw,
   Sparkles,
   ArrowRight,
-  Lock,
+  LogIn,
   Copy,
   Check
 } from 'lucide-react';
 import { generateSmartPrompt, generateImprovementQuestion, refinePrompt, type ImprovementQuestion } from '../services/gemini';
 import { cn } from '../utils/cn';
 
-const MAX_FREE_TRIES = 3;
+const MAX_FREE_TRIES = 1;
 const MAX_REFINE_TRIES = 1;
 
 export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: { 
@@ -140,7 +140,7 @@ export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: {
               AI Engine: Gemini 1.5 Flash
             </div>
             <div className="bg-zinc-800 text-emerald-400 font-bold text-xs px-3 py-1.5 rounded-full">
-              {remainingPrompts > 0 ? `Limit: ${remainingPrompts}x` : "Limit Reached"}
+              {remainingPrompts > 0 ? `Limit: ${remainingPrompts}x` : "Limit Tercapai"}
             </div>
             <button
               onClick={handleGenerate}
@@ -194,13 +194,14 @@ export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: {
 
           {usageCount >= MAX_FREE_TRIES && !smartPrompt && (
             <div className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center rounded-2xl z-10">
-              <Lock className="w-12 h-12 text-emerald-500 mb-4" />
-              <h3 className="text-2xl font-display font-bold mb-2">Free Limit Reached</h3>
+              <LogIn className="w-12 h-12 text-emerald-500 mb-4" />
+              <h3 className="text-2xl font-display font-bold mb-2">Limit Gratis Tercapai</h3>
+              <p className="text-zinc-400 mb-6">Daftar atau masuk untuk mendapatkan akses penuh.</p>
               <button 
                 onClick={onUpgrade}
-                className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-xl transition-all neo-shadow"
+                className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-xl transition-all neo-shadow flex items-center gap-2"
               >
-                Unlock Unlimited Access
+                <LogIn className="w-5 h-5" /> Login / Daftar
               </button>
             </div>
           )}
@@ -220,7 +221,7 @@ export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: {
                     <h2 className="font-display font-bold text-xl">Improve Prompt</h2>
                 </div>
                 <div className="bg-zinc-800 text-emerald-400 font-bold text-xs px-3 py-1.5 rounded-full">
-                  {remainingRefines > 0 ? `${remainingRefines}x Free Trial` : "Limit Reached"}
+                  {remainingRefines > 0 ? `${remainingRefines}x Free Trial` : "Limit Tercapai"}
                 </div>
             </div>
             
@@ -255,9 +256,24 @@ export default function PromptEngine({ onUpgrade, usageCount, setUsageCount }: {
                 </div>
               </div>
             </div>
+
             {isRefining && (
               <div className="absolute inset-0 bg-zinc-950/40 backdrop-blur-[2px] flex items-center justify-center z-20 rounded-2xl">
                 <RefreshCcw className="w-5 h-5 animate-spin text-emerald-500" />
+              </div>
+            )}
+
+            {refineUsageCount >= MAX_REFINE_TRIES && (
+              <div className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center rounded-2xl z-10">
+                <LogIn className="w-12 h-12 text-emerald-500 mb-4" />
+                <h3 className="text-2xl font-display font-bold mb-2">Limit Refine Tercapai</h3>
+                <p className="text-zinc-400 mb-6">Untuk melanjutkan, silakan masuk dengan akun Anda.</p>
+                <button 
+                  onClick={onUpgrade}
+                  className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-xl transition-all neo-shadow flex items-center gap-2"
+                >
+                  <LogIn className="w-5 h-5" /> Login / Daftar
+                </button>
               </div>
             )}
           </motion.div>

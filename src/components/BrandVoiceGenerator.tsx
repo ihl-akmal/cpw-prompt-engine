@@ -1,20 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Sparkles, 
   Zap, 
   Copy, 
   Check, 
   ArrowRight, 
-  Lock, 
+  LogIn,
   RefreshCcw, 
   FileText,
   User,
-  ShieldAlert,
   MessageSquare,
   Download,
-  Plus,
-  X
+  Plus
 } from 'lucide-react';
 import { generateBrandVoice, refineBrandVoice, generateImprovementQuestion, type ImprovementQuestion } from '../services/gemini';
 import { cn } from '../utils/cn';
@@ -25,9 +23,13 @@ const PRESET_ADJECTIVES = [
   "Elegan", "Cerdas", "Humoris", "Empatik", "Otoritatif"
 ];
 
-const MAX_BRAND_VOICE_TRIES = 1;
+const MAX_FREE_TRIES = 1;
 
-export default function BrandVoiceGenerator({ onUpgrade }: { onUpgrade: () => void }) {
+export default function BrandVoiceGenerator({ onUpgrade, usageCount, setUsageCount }: { 
+  onUpgrade: () => void, 
+  usageCount: number, 
+  setUsageCount: (count: number) => void 
+}) {
   const [brandName, setBrandName] = useState('');
   const [industry, setIndustry] = useState('');
   const [audience, setAudience] = useState('');
@@ -43,12 +45,6 @@ export default function BrandVoiceGenerator({ onUpgrade }: { onUpgrade: () => vo
   const [isLoading, setIsLoading] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [usageCount, setUsageCount] = useState(0);
-
-  useEffect(() => {
-    const bCount = localStorage.getItem('brand_voice_usage_count');
-    if (bCount) setUsageCount(parseInt(bCount, 10));
-  }, []);
 
   const toggleAdjective = (adj: string) => {
     if (selectedAdjectives.includes(adj)) {
@@ -67,12 +63,12 @@ export default function BrandVoiceGenerator({ onUpgrade }: { onUpgrade: () => vo
 
   const handleGenerate = async () => {
     if (!brandName || !industry || !audience || selectedAdjectives.length === 0) return;
-
-    if (usageCount >= MAX_BRAND_VOICE_TRIES) {
+    
+    if (usageCount >= MAX_FREE_TRIES) {
       onUpgrade();
       return;
     }
-    
+
     setIsLoading(true);
     setImprovementData(null);
     try {
@@ -86,12 +82,12 @@ export default function BrandVoiceGenerator({ onUpgrade }: { onUpgrade: () => vo
       });
       setGeneratedVoice(result);
       
+      const data = await generateImprovementQuestion(brandName + " " + industry, result);
+      setImprovementData(data);
+
       const newCount = usageCount + 1;
       setUsageCount(newCount);
       localStorage.setItem('brand_voice_usage_count', newCount.toString());
-
-      const data = await generateImprovementQuestion(brandName + " " + industry, result);
-      setImprovementData(data);
     } catch (error) {
       console.error(error);
       alert('Something went wrong. Please try again.');
@@ -121,7 +117,25 @@ export default function BrandVoiceGenerator({ onUpgrade }: { onUpgrade: () => vo
   };
 
   const downloadAsDoc = () => {
-    onUpgrade();
+    const content = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head><meta charset='utf-8'><title>Brand Voice Guide - ${brandName}</title></head>
+      <body>
+        <h1>Brand Voice Guide: ${brandName}</h1>
+        <div style="font-family: Arial, sans-serif;">
+          ${generatedVoice.replace(/\n/g, '<br>')}
+        </div>
+      </body>
+      </html>
+    `;
+    const blob = new Blob(['\ufeff', content], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `BrandVoice_${brandName.replace(/\s+/g, '_')}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const copyToClipboard = () => {
@@ -129,8 +143,6 @@ export default function BrandVoiceGenerator({ onUpgrade }: { onUpgrade: () => vo
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  const remainingTries = MAX_BRAND_VOICE_TRIES - usageCount;
 
   return (
     <div className="space-y-12">
@@ -148,20 +160,8 @@ export default function BrandVoiceGenerator({ onUpgrade }: { onUpgrade: () => vo
         <motion.div 
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="glass rounded-2xl p-6 sm:p-8 space-y-6 relative"
+          className="glass rounded-2xl p-6 sm:p-8 space-y-6"
         >
-          {remainingTries <= 0 && (
-              <div className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center rounded-2xl z-10">
-                  <Lock className="w-12 h-12 text-emerald-500 mb-4" />
-                  <h3 className="text-2xl font-display font-bold mb-2">Free Limit Reached</h3>
-                  <button 
-                      onClick={onUpgrade}
-                      className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-xl transition-all neo-shadow"
-                  >
-                      Unlock Unlimited Access
-                  </button>
-              </div>
-          )}
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Nama Brand & Bidang</label>
@@ -251,22 +251,23 @@ export default function BrandVoiceGenerator({ onUpgrade }: { onUpgrade: () => vo
               />
             </div>
           </div>
-          <div className="mt-6 flex flex-wrap items-center justify-end gap-4">
-            <div className="bg-zinc-800 text-emerald-400 font-bold text-xs px-3 py-1.5 rounded-full">
-              {remainingTries > 0 ? `${remainingTries}x Free Trial` : "Limit Reached"}
+
+          <div className="flex flex-col items-end gap-3">
+            <div className="px-3 py-1.5 bg-zinc-800/50 border border-white/5 rounded-full text-[10px] font-bold text-emerald-500 uppercase tracking-wider">
+              1x Free Trial
             </div>
             <button
               onClick={handleGenerate}
               disabled={isLoading || !brandName || !industry || !audience || selectedAdjectives.length === 0}
               className={cn(
-                "w-full sm:w-auto py-4 px-8 rounded-xl font-bold transition-all neo-shadow flex items-center justify-center gap-2",
+                "w-full py-4 rounded-xl font-bold transition-all neo-shadow flex items-center justify-center gap-2",
                 isLoading || !brandName || !industry || !audience || selectedAdjectives.length === 0
                   ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
                   : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950"
               )}
             >
               {isLoading ? <RefreshCcw className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
-              {isLoading ? "Analyzing..." : "Generate Brand Voice"}
+              {isLoading ? "Menganalisis Brand..." : "Generate Brand Voice"}
             </button>
           </div>
         </motion.div>
@@ -295,9 +296,8 @@ export default function BrandVoiceGenerator({ onUpgrade }: { onUpgrade: () => vo
                 </button>
                 <button
                   onClick={downloadAsDoc}
-                  className="p-2 hover:bg-white/5 rounded-lg transition-colors text-zinc-400 hover:text-emerald-400 disabled:opacity-50"
-                  title="Download as GDocs (.doc) - Pro feature"
-                  disabled
+                  className="p-2 hover:bg-white/5 rounded-lg transition-colors text-zinc-400 hover:text-emerald-400"
+                  title="Download as GDocs (.doc)"
                 >
                   <Download className="w-5 h-5" />
                 </button>
@@ -321,12 +321,26 @@ export default function BrandVoiceGenerator({ onUpgrade }: { onUpgrade: () => vo
               </div>
             )}
           </div>
+
+          {usageCount >= MAX_FREE_TRIES && !generatedVoice && (
+            <div className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center rounded-2xl z-10">
+              <LogIn className="w-12 h-12 text-emerald-500 mb-4" />
+              <h3 className="text-2xl font-display font-bold mb-2">Limit Gratis Tercapai</h3>
+              <p className="text-zinc-400 mb-6">Daftar atau masuk untuk mendapatkan akses penuh.</p>
+              <button 
+                onClick={onUpgrade}
+                className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-xl transition-all neo-shadow flex items-center gap-2"
+              >
+                <LogIn className="w-5 h-5" /> Login / Daftar
+              </button>
+            </div>
+          )}
         </motion.div>
       </div>
 
       {/* Improvement Section for Brand Voice */}
       <AnimatePresence>
-        {generatedVoice && remainingTries > 0 && (
+        {generatedVoice && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
