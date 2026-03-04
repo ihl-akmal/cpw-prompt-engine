@@ -25,14 +25,11 @@ const PRESET_ADJECTIVES = [
   "Elegan", "Cerdas", "Humoris", "Empatik", "Otoritatif"
 ];
 
-const MAX_FREE_TRIES = 1;
-
 interface BrandVoiceGeneratorProps {
   onUpgrade: () => void;
   usageCount: number;
   setUsageCount: (count: number) => void;
   isLoggedIn?: boolean;
-  maxUsage?: number;
 }
 
 export default function BrandVoiceGenerator({ 
@@ -40,7 +37,6 @@ export default function BrandVoiceGenerator({
     usageCount, 
     setUsageCount, 
     isLoggedIn = false,
-    maxUsage = MAX_FREE_TRIES 
 }: BrandVoiceGeneratorProps) {
   const [brandName, setBrandName] = useState('');
   const [industry, setIndustry] = useState('');
@@ -57,19 +53,20 @@ export default function BrandVoiceGenerator({
   const [isLoading, setIsLoading] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const isLimitReached = usageCount >= maxUsage;
+  const isLimitReached = false; // Menonaktifkan limit
 
   const toggleAdjective = (adj: string) => {
     if (selectedAdjectives.includes(adj)) {
       setSelectedAdjectives(selectedAdjectives.filter(a => a !== adj));
-    } else if (selectedAdjectives.length < 3) {
+    } else if (selectedAdjectives.length < 5) { // Tingkatkan batas kata sifat
       setSelectedAdjectives([...selectedAdjectives, adj]);
     }
   };
 
   const addCustomAdjective = () => {
-    if (customAdjective.trim() && !selectedAdjectives.includes(customAdjective) && selectedAdjectives.length < 3) {
+    if (customAdjective.trim() && !selectedAdjectives.includes(customAdjective) && selectedAdjectives.length < 5) {
       setSelectedAdjectives([...selectedAdjectives, customAdjective.trim()]);
       setCustomAdjective('');
     }
@@ -78,13 +75,9 @@ export default function BrandVoiceGenerator({
   const handleGenerate = async () => {
     if (!brandName || !industry || !audience || selectedAdjectives.length === 0) return;
     
-    if (isLimitReached) {
-      onUpgrade();
-      return;
-    }
-
     setIsLoading(true);
     setImprovementData(null);
+    setError(null);
     try {
       const result = await generateBrandVoice({
         name: brandName,
@@ -104,9 +97,15 @@ export default function BrandVoiceGenerator({
       if (!isLoggedIn) {
         localStorage.setItem('brand_voice_usage_count', newCount.toString());
       }
-    } catch (error) {
-      console.error(error);
-      alert('Something went wrong. Please try again.');
+    } catch (error: any) {
+      console.error("Generation Error:", error);
+      if (error.message && error.message.includes('SAFETY')) {
+        setError("Konten yang dihasilkan mungkin tidak aman. Coba ubah input Anda.");
+      } else if (error.message && error.message.includes('TOKEN')) {
+        setError("Input terlalu panjang. Coba perpendek atau upgrade paket untuk batas lebih tinggi.");
+      } else {
+        setError("Terjadi kesalahan sistem. Tim kami sedang menanganinya.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -117,6 +116,7 @@ export default function BrandVoiceGenerator({
     if (!finalRefinement.trim() || isRefining) return;
     
     setIsRefining(true);
+    setError(null);
     try {
       const refined = await refineBrandVoice(generatedVoice, finalRefinement);
       setGeneratedVoice(refined);
@@ -124,9 +124,13 @@ export default function BrandVoiceGenerator({
       
       const data = await generateImprovementQuestion(brandName, refined);
       setImprovementData(data);
-    } catch (error) {
-      console.error(error);
-      alert('Failed to refine guide.');
+    } catch (error: any) {
+        console.error("Refinement Error:", error);
+        if (error.message && error.message.includes('SAFETY')) {
+            setError("Konten yang dihasilkan mungkin tidak aman. Coba ubah input Anda.");
+        } else {
+            setError("Gagal melakukan refine. Coba lagi atau ubah instruksi.");
+        }
     } finally {
       setIsRefining(false);
     }
@@ -166,9 +170,9 @@ export default function BrandVoiceGenerator({
             brandName, setBrandName, industry, setIndustry, audience, setAudience, 
             selectedAdjectives, toggleAdjective, customAdjective, setCustomAdjective, 
             addCustomAdjective, antiVoice, setAntiVoice, example, setExample, 
-            handleGenerate, isLoading, isLimitReached, remaining: maxUsage - usageCount, isLoggedIn
+            handleGenerate, isLoading, isLimitReached, isLoggedIn
         })}
-        {renderOutputArea({ generatedVoice, copied, copyToClipboard, downloadAsDoc, isLimitReached, onUpgrade, isLoggedIn })}
+        {renderOutputArea({ generatedVoice, copied, copyToClipboard, downloadAsDoc, isLimitReached, onUpgrade, isLoggedIn, error, isLoading })}
     </div>
   );
 
@@ -177,7 +181,7 @@ export default function BrandVoiceGenerator({
           <div className="space-y-8">
             {mainContent}
             <AnimatePresence>
-                {generatedVoice && renderRefinementSection({ improvementData, handleRefine, manualRefinement, setManualRefinement, isRefining })}
+                {generatedVoice && !error && renderRefinementSection({ improvementData, handleRefine, manualRefinement, setManualRefinement, isRefining })}
             </AnimatePresence>
           </div>
       )
@@ -195,7 +199,7 @@ export default function BrandVoiceGenerator({
       </div>
       {mainContent}
       <AnimatePresence>
-        {generatedVoice && renderRefinementSection({ improvementData, handleRefine, manualRefinement, setManualRefinement, isRefining })}
+        {generatedVoice && !error && renderRefinementSection({ improvementData, handleRefine, manualRefinement, setManualRefinement, isRefining })}
       </AnimatePresence>
     </div>
   );
@@ -203,7 +207,7 @@ export default function BrandVoiceGenerator({
 
 // --- Reusable Render Functions ---
 
-const renderInputForm = ({ brandName, setBrandName, industry, setIndustry, audience, setAudience, selectedAdjectives, toggleAdjective, customAdjective, setCustomAdjective, addCustomAdjective, antiVoice, setAntiVoice, example, setExample, handleGenerate, isLoading, isLimitReached, remaining, isLoggedIn }) => (
+const renderInputForm = ({ brandName, setBrandName, industry, setIndustry, audience, setAudience, selectedAdjectives, toggleAdjective, customAdjective, setCustomAdjective, addCustomAdjective, antiVoice, setAntiVoice, example, setExample, handleGenerate, isLoading, isLimitReached, isLoggedIn }) => (
     <motion.div 
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
@@ -241,7 +245,7 @@ const renderInputForm = ({ brandName, setBrandName, industry, setIndustry, audie
         </div>
 
         <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Tiga Kata Sifat ({selectedAdjectives.length}/3)</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Lima Kata Sifat ({selectedAdjectives.length}/5)</label>
             <div className="flex flex-wrap gap-2 mb-3">
             {PRESET_ADJECTIVES.map(adj => (
                 <button
@@ -300,18 +304,12 @@ const renderInputForm = ({ brandName, setBrandName, industry, setIndustry, audie
         </div>
 
         <div className="flex flex-col items-end gap-3 pt-4 border-t border-white/5">
-        <div className={cn(
-            "font-bold text-xs px-3 py-1.5 rounded-full",
-            isLimitReached ? "bg-zinc-800 text-zinc-500" : "bg-zinc-800 text-emerald-400"
-        )}>
-            {isLimitReached ? "Limit Tercapai" : `Sisa: ${remaining}x`}
-        </div>
         <button
             onClick={handleGenerate}
-            disabled={isLoading || !brandName || !industry || !audience || selectedAdjectives.length === 0 || isLimitReached}
+            disabled={isLoading || !brandName || !industry || !audience || selectedAdjectives.length === 0}
             className={cn(
             "w-full py-4 rounded-xl font-bold transition-all neo-shadow flex items-center justify-center gap-2",
-            isLoading || !brandName || !industry || !audience || selectedAdjectives.length === 0 || isLimitReached
+            isLoading || !brandName || !industry || !audience || selectedAdjectives.length === 0
                 ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
                 : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950"
             )}
@@ -323,7 +321,7 @@ const renderInputForm = ({ brandName, setBrandName, industry, setIndustry, audie
     </motion.div>
 );
 
-const renderOutputArea = ({ generatedVoice, copied, copyToClipboard, downloadAsDoc, isLimitReached, onUpgrade, isLoggedIn }) => (
+const renderOutputArea = ({ generatedVoice, copied, copyToClipboard, downloadAsDoc, isLimitReached, onUpgrade, isLoggedIn, error, isLoading }) => (
     <motion.div 
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
@@ -336,7 +334,7 @@ const renderOutputArea = ({ generatedVoice, copied, copyToClipboard, downloadAsD
             </div>
             <h2 className="font-display font-bold text-xl">Brand Voice Guide</h2>
         </div>
-        {generatedVoice && (
+        {generatedVoice && !error && (
             <div className="flex gap-2">
             <button
                 onClick={copyToClipboard}
@@ -357,7 +355,13 @@ const renderOutputArea = ({ generatedVoice, copied, copyToClipboard, downloadAsD
         </div>
 
         <div className="flex-grow bg-zinc-950/50 border border-white/5 rounded-xl p-6 font-sans text-sm leading-relaxed overflow-auto max-h-[700px]">
-        {generatedVoice ? (
+        {error ? (
+            <div className="h-full flex flex-col items-center justify-center text-center text-red-400">
+                <Zap className="w-12 h-12 mb-4 opacity-50" />
+                <h3 className="font-bold text-lg mb-2">Gagal Generate</h3>
+                <p className="text-zinc-400">{error}</p>
+            </div>
+        ) : generatedVoice ? (
             <div className="prose prose-invert prose-emerald max-w-none">
             {generatedVoice.split('\n').map((line, i) => {
                 if (line.startsWith('#')) return <h3 key={i} className="text-emerald-400 font-display font-bold mt-4 mb-2">{line.replace(/#/g, '')}</h3>;
@@ -367,8 +371,17 @@ const renderOutputArea = ({ generatedVoice, copied, copyToClipboard, downloadAsD
             </div>
         ) : (
             <div className="h-full flex flex-col items-center justify-center text-zinc-600 text-center py-20">
-            <User className="w-16 h-16 mb-4 opacity-10" />
-            <p>Isi formulir di sebelah kiri untuk<br />melihat kepribadian brand Anda.</p>
+                {isLoading ? (
+                    <div className="flex items-center gap-3">
+                        <RefreshCcw className="w-6 h-6 animate-spin text-emerald-500" />
+                        <span className="text-lg">Menganalisis...</span>
+                    </div>
+                ) : (
+                    <>
+                        <User className="w-16 h-16 mb-4 opacity-10" />
+                        <p>Isi formulir di sebelah kiri untuk<br />melihat kepribadian brand Anda.</p>
+                    </>
+                )}
             </div>
         )}
         </div>
@@ -409,6 +422,7 @@ const renderRefinementSection = ({ improvementData, handleRefine, manualRefineme
     <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
         className="glass rounded-2xl p-6 sm:p-8 max-w-4xl mx-auto relative overflow-hidden"
     >
         <div className="flex items-center gap-2 mb-6">
