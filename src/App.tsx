@@ -113,6 +113,9 @@ const Navbar = ({ user, onLogin }: { user: User | null, onLogin: () => void }) =
             <span className="font-display font-bold text-base sm:text-xl tracking-tight">
               PROMPT<span className="text-emerald-500">ENGINE</span>
             </span>
+            <span className="font-cursive text-emerald-400 text-xs sm:text-lg -mt-0.5 sm:mt-0">
+                by akmal
+              </span>
           </div>
         </Link>
         
