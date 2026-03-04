@@ -15,7 +15,7 @@ import BrandVoiceGenerator from './components/BrandVoiceGenerator';
 import Dashboard from './components/Dashboard';
 
 // Firebase Imports
-import { auth, googleProvider, isFirebaseConfigured, firebaseConfig } from './services/firebase'; // <-- Import firebaseConfig
+import { auth, googleProvider, isFirebaseConfigured, firebaseConfig } from './services/firebase';
 import { signInWithPopup, onAuthStateChanged, signOut, type User } from 'firebase/auth';
 
 // --- Main App Component ---
@@ -44,9 +44,6 @@ function AppContent() {
 
   // --- Auth Functions ---
   const handleGoogleLogin = async () => {
-    // DEBUGGING: Tampilkan konfigurasi yang sedang dibaca aplikasi
-    console.log("Firebase Config being used:", firebaseConfig);
-
     if (!isFirebaseConfigured) {
       alert("Konfigurasi Firebase belum lengkap. Silakan periksa file .env.local dan restart server (npm run dev).");
       return;
@@ -83,7 +80,7 @@ function AppContent() {
       
       <main className="max-w-7xl mx-auto px-4 py-12">
         <Routes>
-          <Route path="/" element={<MainTools onLogin={handleGoogleLogin} />} />
+          <Route path="/" element={user ? <Navigate to="/dashboard" /> : <MainTools onLogin={handleGoogleLogin} />} />
           <Route path="/dashboard" element={user ? <Dashboard user={user} handleLogout={handleLogout} /> : <Navigate to="/" />} />
         </Routes>
       </main>
@@ -108,7 +105,7 @@ const Navbar = ({ user, onLogin }: { user: User | null, onLogin: () => void }) =
   return (
     <nav className="border-b border-white/5 bg-zinc-950/50 backdrop-blur-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 sm:gap-3">
+        <Link to={user ? "/dashboard" : "/"} className="flex items-center gap-2 sm:gap-3">
           <div className="w-7 h-7 sm:w-8 sm:h-8 bg-emerald-500 rounded-lg flex items-center justify-center shrink-0">
             <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-950 fill-current" />
           </div>
@@ -134,15 +131,12 @@ const Navbar = ({ user, onLogin }: { user: User | null, onLogin: () => void }) =
 // --- Main Tools Page (Prompt & Brand Voice) ---
 const MainTools = ({ onLogin }: { onLogin: () => void }) => {
   const [currentView, setCurrentView] = useState<'prompt' | 'brand-voice'>('prompt');
+  // Usage state is now managed locally for non-logged-in users
   const [promptUsage, setPromptUsage] = useState(0);
   const [brandVoiceUsage, setBrandVoiceUsage] = useState(0);
+  const [refineUsage, setRefineUsage] = useState(0);
 
-  useEffect(() => {
-    const pCount = localStorage.getItem('prompt_usage_count');
-    const bCount = localStorage.getItem('brand_voice_usage_count');
-    if (pCount) setPromptUsage(parseInt(pCount, 10));
-    if (bCount) setBrandVoiceUsage(parseInt(bCount, 10));
-  }, []);
+  // No more localStorage reading
 
   return (
     <>
@@ -183,6 +177,9 @@ const MainTools = ({ onLogin }: { onLogin: () => void }) => {
               onUpgrade={onLogin} 
               usageCount={promptUsage}
               setUsageCount={setPromptUsage}
+              refineUsageCount={refineUsage}
+              setRefineUsageCount={setRefineUsage}
+              isLoggedIn={false}
             />
           </motion.div>
         ) : (
@@ -196,6 +193,7 @@ const MainTools = ({ onLogin }: { onLogin: () => void }) => {
               onUpgrade={onLogin} 
               usageCount={brandVoiceUsage}
               setUsageCount={setBrandVoiceUsage}
+              isLoggedIn={false}
             />
           </motion.div>
         )}
