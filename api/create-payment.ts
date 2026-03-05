@@ -2,7 +2,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const MAYAR_SECRET_TOKEN = process.env.MAYAR_SECRET_TOKEN;
-const MAYAR_API_URL = 'https://api.mayar.id/hl/v1/invoice/create';
+// --- FIX: Change to the correct endpoint for Single Payment Request ---
+const MAYAR_API_URL = 'https://api.mayar.id/hl/v1/payment/create';
 
 export default async function handler(
   req: VercelRequest,
@@ -14,37 +15,28 @@ export default async function handler(
   }
 
   if (!MAYAR_SECRET_TOKEN) {
-    console.error("MAYAR_SECRET_TOKEN is not set in environment variables.");
-    return res.status(500).json({ message: 'Server configuration error: Payment API secret is missing.' });
+    console.error("MAYAR_SECRET_TOKEN is not set.");
+    return res.status(500).json({ message: 'Server configuration error.' });
   }
 
   const { name, email, userId } = req.body;
   if (!name || !email || !userId) {
-    return res.status(400).json({ message: 'Missing required fields: name, email, userId' });
+    return res.status(400).json({ message: 'Missing required fields.' });
   }
 
-  // --- FIX: Address all validation errors from Mayar API ---
-
-  // 1. Fix redirectUrl: Vercel's env variable doesn't include the protocol.
   const baseUrl = process.env.VERCEL_URL
       ? `https://${process.env.VERCEL_URL}`
       : 'http://localhost:3000';
 
+  // --- FIX: Adjust payload to match the Single Payment Request format ---
   const payload = {
     name: name,
     email: email,
-    // 2. Add 'mobile': This is a placeholder. You MUST collect this from your user.
-    mobile: "081234567890", 
-    // 3. Add 'items': This is required by the invoice API.
-    items: [
-        {
-            name: "Poral - Upgrade to Pro Account",
-            price: 50000,
-            quantity: 1
-        }
-    ],
+    mobile: "081234567890", // This can be a placeholder if not collected
+    amount: 50000,         // Use 'amount' for single payment
+    description: "Poral - Upgrade to Pro Account",
     redirectUrl: `${baseUrl}?payment=success`,
-    externalId: userId // This is CRITICAL for the webhook to work correctly
+    externalId: userId       // This is crucial for linking the payment back to the user
   };
 
   try {
@@ -57,34 +49,30 @@ export default async function handler(
       body: JSON.stringify(payload),
     });
 
+    const responseBodyText = await apiResponse.text();
+
     if (!apiResponse.ok) {
-      const errorBody = await apiResponse.text();
-      console.error('Mayar API Error Body:', errorBody); 
-      let errorMessage = `API request failed with status ${apiResponse.status}`;
-       try {
-        const errorJson = JSON.parse(errorBody);
-        if (Array.isArray(errorJson.message)) {
-            errorMessage = errorJson.message.join(', ');
-        } else {
-            errorMessage = errorJson.message || errorMessage;
-        }
-      } catch (e) {
-        if (errorBody.length > 0 && errorBody.length < 200) {
-          errorMessage = errorBody;
-        }
-      }
-      return res.status(apiResponse.status).json({ message: `Mayar API Error: ${errorMessage}` });
+      console.error('Mayar API Error Body:', responseBodyText);
+      return res.status(apiResponse.status).json({ message: `Mayar API Error: ${responseBodyText}` });
     }
+    
+    const data = JSON.parse(responseBodyText);
 
-    const data = await apiResponse.json();
+    // This response handling logic is likely the same and should work
+    if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+      const paymentInfo = data.data;
 
-    const paymentUrl = data.invoiceUrl || data.linkUrl;
+      const paymentUrl = paymentInfo.link;
 
-    if (paymentUrl) { 
-      return res.status(200).json({ linkUrl: paymentUrl });
+      if (paymentUrl) {
+        return res.status(200).json({ linkUrl: paymentUrl });
+      } else {
+        console.error("The 'link' field was not found inside the 'data' object from Mayar", paymentInfo);
+        return res.status(500).json({ message: 'Payment URL field not found in Mayar response data.' });
+      }
     } else {
-      console.error("Payment URL not found in successful API response from Mayar", data);
-      return res.status(500).json({ message: 'Payment URL not found in API response.' });
+      console.error("Unexpected response structure from Mayar. Expected 'data' to be an object.", data);
+      return res.status(500).json({ message: 'Unexpected API response structure from Mayar.' });
     }
 
   } catch (error: any) {
