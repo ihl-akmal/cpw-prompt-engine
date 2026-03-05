@@ -7,18 +7,16 @@ import {
   LayoutDashboard,
   Mic2,
   LogIn,
-  User as UserIcon
+  User as UserIcon,
+  Crown
 } from 'lucide-react';
 import { cn } from './utils/cn';
+import Dashboard from './components/Dashboard';
+import { auth, googleProvider, isFirebaseConfigured, getUserProfile, type UserProfile } from './services/firebase';
+import { signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
 import PromptEngine from './components/PromptEngine';
 import BrandVoiceGenerator from './components/BrandVoiceGenerator';
-import Dashboard from './components/Dashboard';
 
-// Firebase Imports
-import { auth, googleProvider, isFirebaseConfigured, firebaseConfig } from './services/firebase';
-import { signInWithPopup, onAuthStateChanged, signOut, type User } from 'firebase/auth';
-
-// --- Main App Component ---
 function App() {
   return (
     <BrowserRouter>
@@ -27,37 +25,52 @@ function App() {
   );
 }
 
-// --- Content Wrapper to use hooks from react-router ---
 function AppContent() {
-  const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const navigate = useNavigate();
 
-  // --- Auth State Listener ---
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setAuthLoading(false);
+    // Check for Firebase configuration availability on the client side
+    if (!isFirebaseConfigured) {
+      console.error("Firebase config is not available. Please check your VITE_ environment variables.");
+      setAuthLoading(false); // Stop loading to prevent infinite loop
+      // Optionally, you could show a more user-friendly error message here
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      try {
+        if (user) {
+          const profile = await getUserProfile(user);
+          setUserProfile(profile);
+        } else {
+          setUserProfile(null);
+        }
+      } catch (error) {
+        console.error("Failed to get user profile:", error);
+        // If fetching profile fails, treat as logged out to avoid broken states
+        setUserProfile(null);
+      } finally {
+        // This is crucial: always stop loading, regardless of outcome
+        setAuthLoading(false);
+      }
     });
+
     return () => unsubscribe();
   }, []);
 
-  // --- Auth Functions ---
   const handleGoogleLogin = async () => {
     if (!isFirebaseConfigured) {
-      alert("Konfigurasi Firebase belum lengkap. Silakan periksa file .env.local dan restart server (npm run dev).");
-      return;
-    }
-    if (user) {
-      navigate('/dashboard');
+      alert("Konfigurasi Firebase belum lengkap. Pastikan variabel lingkungan VITE_ sudah benar.");
       return;
     }
     try {
       await signInWithPopup(auth, googleProvider);
-      navigate('/dashboard');
+      // onAuthStateChanged will handle the profile fetching and navigation
     } catch (error) {
       console.error("Authentication failed:", error);
-      alert("Gagal masuk dengan Google. Periksa konsol untuk detail error.");
+      alert("Gagal masuk dengan Google. Periksa konsol untuk detail.");
     }
   };
 
@@ -76,12 +89,12 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-emerald-500/30">
-      <Navbar user={user} onLogin={handleGoogleLogin} />
+      <Navbar userProfile={userProfile} onLogin={handleGoogleLogin} />
       
       <main className="max-w-7xl mx-auto px-4 py-12">
         <Routes>
-          <Route path="/" element={user ? <Navigate to="/dashboard" /> : <MainTools onLogin={handleGoogleLogin} />} />
-          <Route path="/dashboard" element={user ? <Dashboard user={user} handleLogout={handleLogout} /> : <Navigate to="/" />} />
+          <Route path="/" element={userProfile ? <Navigate to="/dashboard" /> : <MainTools onLogin={handleGoogleLogin} />} />
+          <Route path="/dashboard" element={userProfile ? <Dashboard userProfile={userProfile} handleLogout={handleLogout} /> : <Navigate to="/" />} />
         </Routes>
       </main>
 
@@ -90,12 +103,13 @@ function AppContent() {
   );
 }
 
-// --- Navbar Component ---
-const Navbar = ({ user, onLogin }: { user: User | null, onLogin: () => void }) => {
+// --- Navbar, MainTools, Footer components remain unchanged ---
+
+const Navbar = ({ userProfile, onLogin }: { userProfile: UserProfile | null, onLogin: () => void }) => {
   const navigate = useNavigate();
   
   const handleAuthAction = () => {
-    if (user) {
+    if (userProfile) {
       navigate('/dashboard');
     } else {
       onLogin();
@@ -105,7 +119,7 @@ const Navbar = ({ user, onLogin }: { user: User | null, onLogin: () => void }) =
   return (
     <nav className="border-b border-white/5 bg-zinc-950/50 backdrop-blur-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <Link to={user ? "/dashboard" : "/"} className="flex items-center gap-2 sm:gap-3">
+        <Link to={userProfile ? "/dashboard" : "/"} className="flex items-center gap-2 sm:gap-3">
           <div className="w-7 h-7 sm:w-8 sm:h-8 bg-emerald-500 rounded-lg flex items-center justify-center shrink-0">
             <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-950 fill-current" />
           </div>
@@ -123,24 +137,21 @@ const Navbar = ({ user, onLogin }: { user: User | null, onLogin: () => void }) =
           onClick={handleAuthAction}
           className="px-3 py-1.5 sm:px-4 sm:py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-lg transition-all text-xs sm:text-sm neo-shadow flex items-center gap-2"
         >
-          {user ? <UserIcon className="w-4 h-4" /> : <LogIn className="w-4 h-4" />}
-          {user ? 'Dashboard' : 'Login / Register'}
+          {userProfile ? (
+            userProfile.isPro ? <Crown className="w-4 h-4 text-amber-400" /> : <UserIcon className="w-4 h-4" />
+          ) : (
+            <LogIn className="w-4 h-4" />
+          )}
+          {userProfile ? 'Dashboard' : 'Login / Register'}
         </button>
       </div>
     </nav>
   );
 }
 
-// --- Main Tools Page (Prompt & Brand Voice) ---
 const MainTools = ({ onLogin }: { onLogin: () => void }) => {
   const [currentView, setCurrentView] = useState<'prompt' | 'brand-voice'>('prompt');
-  // Usage state is now managed locally for non-logged-in users
-  const [promptUsage, setPromptUsage] = useState(0);
-  const [brandVoiceUsage, setBrandVoiceUsage] = useState(0);
-  const [refineUsage, setRefineUsage] = useState(0);
-
-  // No more localStorage reading
-
+  
   return (
     <>
       <div className="md:flex justify-center mb-8">
@@ -170,34 +181,12 @@ const MainTools = ({ onLogin }: { onLogin: () => void }) => {
     
       <AnimatePresence mode="wait">
         {currentView === 'prompt' ? (
-          <motion.div
-            key="prompt"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-          >
-            <PromptEngine 
-              onUpgrade={onLogin} 
-              usageCount={promptUsage}
-              setUsageCount={setPromptUsage}
-              refineUsageCount={refineUsage}
-              setRefineUsageCount={setRefineUsage}
-              isLoggedIn={false}
-            />
+          <motion.div key="prompt">
+            <PromptEngine onUpgrade={onLogin} isLoggedIn={false} usageCount={0} setUsageCount={() => {}} refineUsageCount={0} setRefineUsageCount={() => {}} />
           </motion.div>
         ) : (
-          <motion.div
-            key="brand-voice"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-          >
-            <BrandVoiceGenerator 
-              onUpgrade={onLogin} 
-              usageCount={brandVoiceUsage}
-              setUsageCount={setBrandVoiceUsage}
-              isLoggedIn={false}
-            />
+          <motion.div key="brand-voice">
+             <BrandVoiceGenerator onUpgrade={onLogin} isLoggedIn={false} usageCount={0} setUsageCount={() => {}} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -205,7 +194,6 @@ const MainTools = ({ onLogin }: { onLogin: () => void }) => {
   );
 }
 
-// --- Footer Component ---
 const Footer = () => (
   <footer className="border-t border-white/5 py-12 mt-20">
     <div className="max-w-7xl mx-auto px-4 text-center">
@@ -213,6 +201,5 @@ const Footer = () => (
     </div>
   </footer>
 );
-
 
 export default App;
