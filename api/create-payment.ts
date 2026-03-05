@@ -2,7 +2,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 const MAYAR_SECRET_TOKEN = process.env.MAYAR_SECRET_TOKEN;
-// --- FIX: Using the correct endpoint from the user's cURL example ---
 const MAYAR_API_URL = 'https://api.mayar.id/hl/v1/invoice/create';
 
 export default async function handler(
@@ -24,14 +23,28 @@ export default async function handler(
     return res.status(400).json({ message: 'Missing required fields: name, email, userId' });
   }
 
-  // --- FIX: Using the flat payload structure from cURL, and ADDING externalId for the webhook ---
+  // --- FIX: Address all validation errors from Mayar API ---
+
+  // 1. Fix redirectUrl: Vercel's env variable doesn't include the protocol.
+  const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000';
+
   const payload = {
     name: name,
     email: email,
-    amount: 50000,
-    description: "Poral - Upgrade to Pro Account",
-    redirectUrl: `${process.env.VERCEL_URL || 'http://localhost:3000'}?payment=success`,
-    externalId: userId // This is CRITICAL for the webhook to identify the user
+    // 2. Add 'mobile': This is a placeholder. You MUST collect this from your user.
+    mobile: "081234567890", 
+    // 3. Add 'items': This is required by the invoice API.
+    items: [
+        {
+            name: "Poral - Upgrade to Pro Account",
+            price: 50000,
+            quantity: 1
+        }
+    ],
+    redirectUrl: `${baseUrl}?payment=success`,
+    externalId: userId // This is CRITICAL for the webhook to work correctly
   };
 
   try {
@@ -46,11 +59,10 @@ export default async function handler(
 
     if (!apiResponse.ok) {
       const errorBody = await apiResponse.text();
-      console.error('Mayar API Error Body:', errorBody); // Log the full error from Mayar
+      console.error('Mayar API Error Body:', errorBody); 
       let errorMessage = `API request failed with status ${apiResponse.status}`;
        try {
         const errorJson = JSON.parse(errorBody);
-        // Join error messages if they are in an array
         if (Array.isArray(errorJson.message)) {
             errorMessage = errorJson.message.join(', ');
         } else {
@@ -66,7 +78,6 @@ export default async function handler(
 
     const data = await apiResponse.json();
 
-    // The response for invoice creation might be different. Let's check for `invoiceUrl` or `linkUrl`.
     const paymentUrl = data.invoiceUrl || data.linkUrl;
 
     if (paymentUrl) { 
