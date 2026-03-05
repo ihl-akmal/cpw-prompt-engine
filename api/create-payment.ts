@@ -1,10 +1,9 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// IMPORTANT: Use the same secret token you use for webhooks
 const MAYAR_SECRET_TOKEN = process.env.MAYAR_SECRET_TOKEN;
-// --- FIX: Corrected API URL based on user's documentation reference ---
-const MAYAR_API_URL = 'https://api.mayar.id/hl/v1/payment/create';
+// --- FIX: Using the correct endpoint from the user's cURL example ---
+const MAYAR_API_URL = 'https://api.mayar.id/hl/v1/invoice/create';
 
 export default async function handler(
   req: VercelRequest,
@@ -25,14 +24,14 @@ export default async function handler(
     return res.status(400).json({ message: 'Missing required fields: name, email, userId' });
   }
 
-  // --- FIX: Using 'externalId' for webhook compatibility ---
+  // --- FIX: Using the flat payload structure from cURL, and ADDING externalId for the webhook ---
   const payload = {
     name: name,
     email: email,
     amount: 50000,
     description: "Poral - Upgrade to Pro Account",
     redirectUrl: `${process.env.VERCEL_URL || 'http://localhost:3000'}?payment=success`,
-    externalId: userId // This is crucial for the webhook to identify the user
+    externalId: userId // This is CRITICAL for the webhook to identify the user
   };
 
   try {
@@ -47,11 +46,16 @@ export default async function handler(
 
     if (!apiResponse.ok) {
       const errorBody = await apiResponse.text();
-      console.error('Mayar API Error:', errorBody);
+      console.error('Mayar API Error Body:', errorBody); // Log the full error from Mayar
       let errorMessage = `API request failed with status ${apiResponse.status}`;
-      try {
+       try {
         const errorJson = JSON.parse(errorBody);
-        errorMessage = errorJson.message || errorMessage;
+        // Join error messages if they are in an array
+        if (Array.isArray(errorJson.message)) {
+            errorMessage = errorJson.message.join(', ');
+        } else {
+            errorMessage = errorJson.message || errorMessage;
+        }
       } catch (e) {
         if (errorBody.length > 0 && errorBody.length < 200) {
           errorMessage = errorBody;
@@ -62,9 +66,11 @@ export default async function handler(
 
     const data = await apiResponse.json();
 
-    // According to docs for this endpoint, the URL is in data.linkUrl
-    if (data && data.linkUrl) { 
-      return res.status(200).json({ linkUrl: data.linkUrl });
+    // The response for invoice creation might be different. Let's check for `invoiceUrl` or `linkUrl`.
+    const paymentUrl = data.invoiceUrl || data.linkUrl;
+
+    if (paymentUrl) { 
+      return res.status(200).json({ linkUrl: paymentUrl });
     } else {
       console.error("Payment URL not found in successful API response from Mayar", data);
       return res.status(500).json({ message: 'Payment URL not found in API response.' });
