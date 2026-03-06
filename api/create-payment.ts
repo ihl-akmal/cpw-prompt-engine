@@ -1,9 +1,9 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { URL } from 'url';
 
 const MAYAR_SECRET_TOKEN = process.env.MAYAR_SECRET_TOKEN;
-// --- FIX: Change to the correct endpoint for Single Payment Request ---
-const MAYAR_API_URL = 'https://api.mayar.id/hl/v1/payment/create';
+const MAYAR_API_URL = 'https://api.mayar.club/hl/v1/payment/create';
 
 export default async function handler(
   req: VercelRequest,
@@ -21,22 +21,32 @@ export default async function handler(
 
   const { name, email, userId } = req.body;
   if (!name || !email || !userId) {
-    return res.status(400).json({ message: 'Missing required fields.' });
+    return res.status(400).json({ message: 'Missing required fields: name, email, and userId are required.' });
   }
 
-  const baseUrl = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000';
+  // Determine the base URL from the referer header for robustness
+  const referer = req.headers.referer;
+  let baseUrl;
 
-  // --- FIX: Adjust payload to match the Single Payment Request format ---
+  if (referer) {
+    const refererUrl = new URL(referer);
+    baseUrl = refererUrl.origin; // e.g., http://localhost:5173 or https://promptengine.vercel.app
+  } else {
+    // Fallback for cases where referer is not sent. Use Vercel's official env var.
+    baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:5173'; // Fallback to the correct Vite default port
+  }
+
   const payload = {
     name: name,
     email: email,
-    mobile: "081234567890", // This can be a placeholder if not collected
-    amount: 50000,         // Use 'amount' for single payment
-    description: "Poral - Upgrade to Pro Account",
-    redirectUrl: `${baseUrl}?payment=success`,
-    externalId: userId       // This is crucial for linking the payment back to the user
+    mobile: "081234567890", 
+    amount: 99000,         
+    description: "PROMPTENGINE - Upgrade to Pro Account",
+    // Redirect directly to the dashboard for a smoother UX
+    redirectUrl: `${baseUrl}/dashboard?payment=success`,
+    externalId: userId
   };
 
   try {
@@ -58,10 +68,8 @@ export default async function handler(
     
     const data = JSON.parse(responseBodyText);
 
-    // This response handling logic is likely the same and should work
     if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
       const paymentInfo = data.data;
-
       const paymentUrl = paymentInfo.link;
 
       if (paymentUrl) {

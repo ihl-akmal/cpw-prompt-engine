@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Zap, 
@@ -13,7 +13,7 @@ import {
 import { cn } from './utils/cn';
 import Dashboard from './components/Dashboard';
 import { auth, googleProvider, isFirebaseConfigured, getUserProfile, type UserProfile } from './services/firebase';
-import { signInWithPopup, onAuthStateChanged, signOut } from 'firebase/auth';
+import { signInWithPopup, onAuthStateChanged, signOut, User } from 'firebase/auth';
 import PromptEngine from './components/PromptEngine';
 import BrandVoiceGenerator from './components/BrandVoiceGenerator';
 
@@ -29,48 +29,63 @@ function AppContent() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const refreshUserProfile = useCallback(async (user: User) => {
+    try {
+      // Force re-fetch from the server
+      const updatedProfile = await getUserProfile(user);
+      setUserProfile(updatedProfile);
+    } catch (error) {
+      console.error("Error refreshing user profile:", error);
+    }
+  }, []);
 
   useEffect(() => {
-    // Check for Firebase configuration availability on the client side
     if (!isFirebaseConfigured) {
-      console.error("Firebase config is not available. Please check your VITE_ environment variables.");
-      setAuthLoading(false); // Stop loading to prevent infinite loop
-      // Optionally, you could show a more user-friendly error message here
+      console.error("Firebase config is not available.");
+      setAuthLoading(false);
       return;
     }
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      try {
-        if (user) {
-          const profile = await getUserProfile(user);
-          setUserProfile(profile);
-        } else {
-          setUserProfile(null);
-        }
-      } catch (error) {
-        console.error("Failed to get user profile:", error);
-        // If fetching profile fails, treat as logged out to avoid broken states
+      if (user) {
+        await refreshUserProfile(user);
+      } else {
         setUserProfile(null);
-      } finally {
-        // This is crucial: always stop loading, regardless of outcome
-        setAuthLoading(false);
       }
+      setAuthLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [refreshUserProfile]);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.has('payment') && searchParams.get('payment') === 'success') {
+      const user = auth.currentUser;
+      if (user) {
+        // Give Firestore a moment to be updated by the webhook
+        setTimeout(() => {
+          refreshUserProfile(user);
+        }, 2000); 
+      }
+      // Clean up the URL by removing the query parameters
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location, navigate, refreshUserProfile]);
+
 
   const handleGoogleLogin = async () => {
     if (!isFirebaseConfigured) {
-      alert("Konfigurasi Firebase belum lengkap. Pastikan variabel lingkungan VITE_ sudah benar.");
+      alert("Konfigurasi Firebase belum lengkap.");
       return;
     }
     try {
       await signInWithPopup(auth, googleProvider);
-      // onAuthStateChanged will handle the profile fetching and navigation
     } catch (error) {
       console.error("Authentication failed:", error);
-      alert("Gagal masuk dengan Google. Periksa konsol untuk detail.");
+      alert("Gagal masuk dengan Google.");
     }
   };
 
