@@ -34,11 +34,14 @@ const app = getApps().length === 0
 
 const db = getFirestore(app);
 
-// --- 3. Webhook Handler (No changes below this line) ---
+// --- 3. Webhook Handler ---
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ) {
+    // DEBUGGING: Print all incoming headers
+    console.log("Incoming Headers:", req.headers);
+
     if (req.method !== 'POST') {
         res.setHeader('Allow', 'POST');
         return res.status(405).end('Method Not Allowed');
