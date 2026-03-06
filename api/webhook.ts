@@ -4,6 +4,12 @@ import { initializeApp, cert, type App } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import crypto from 'crypto';
 
+export const config = {
+    api: {
+      bodyParser: false
+    }
+  }
+
 // --- FIX: Decode the service account key from Base64 ---
 if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
   throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
@@ -11,7 +17,7 @@ if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
 const serviceAccountJson = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_KEY, 'base64').toString('utf-8');
 const serviceAccount = JSON.parse(serviceAccountJson);
 
-const mayarSecretToken = process.env.MAYAR_SECRET_TOKEN as string;
+const mayarWebhookToken = process.env.MAYAR_WEBHOOK_TOKEN as string;
 
 // Initialize Firebase Admin SDK
 let adminApp: App;
@@ -50,17 +56,22 @@ export default async function handler(
     });
 
     if (!signature || !timestamp) {
-        return res.status(400).send('Missing Mayar signature headers');
+        console.log("Test webhook without signature");
+        return res.status(200).send('Missing Mayar signature headers');
     }
 
     // Verify the webhook signature
     const signingPayload = `${timestamp}.${rawBody}`;
     const expectedSignature = crypto
-        .createHmac('sha256', mayarSecretToken)
+        .createHmac('sha256', mayarWebhookToken)
         .update(signingPayload)
         .digest('hex');
 
-    if (signature !== expectedSignature) {
+    // DEBUG LOG
+console.log("signature:", signature);
+console.log("expected:", expectedSignature);
+
+        if (signature !== expectedSignature) {
         return res.status(403).send('Invalid signature');
     }
 
