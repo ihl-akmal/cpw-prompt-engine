@@ -4,20 +4,28 @@ import { initializeApp, cert, type App } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import crypto from 'crypto';
 
-// IMPORTANT: In Vercel, use Environment Variables for sensitive data
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string);
+// --- FIX: Decode the service account key from Base64 ---
+if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+  throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set.');
+}
+const serviceAccountJson = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_KEY, 'base64').toString('utf-8');
+const serviceAccount = JSON.parse(serviceAccountJson);
+
 const mayarSecretToken = process.env.MAYAR_SECRET_TOKEN as string;
 
 // Initialize Firebase Admin SDK
 let adminApp: App;
-if (!adminApp) { // Prevent re-initialization
-    adminApp = initializeApp({
+// Check if the app is already initialized to prevent errors
+// Use a global variable to store the initialized app to avoid re-initialization
+const globalWithApp = global as typeof global & { adminApp?: App };
+if (!globalWithApp.adminApp) {
+    globalWithApp.adminApp = initializeApp({
         credential: cert(serviceAccount),
     });
 }
+adminApp = globalWithApp.adminApp;
 const db = getFirestore(adminApp);
 
-// --- The Main Handler Function for Vercel ---
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
@@ -27,59 +35,57 @@ export default async function handler(
         return res.status(405).end('Method Not Allowed');
     }
 
-    // 1. Verify Mayar Signature
     const signature = req.headers['x-mayar-signature'] as string;
-    const body = req.body;
+    const timestamp = req.headers['x-mayar-timestamp'] as string;
+    
+    // Convert the request body to a raw string
+    const rawBody = await new Promise<string>((resolve) => {
+      let data = '';
+      req.on('data', (chunk) => {
+        data += chunk;
+      });
+      req.on('end', () => {
+        resolve(data);
+      });
+    });
 
-    if (!signature) {
-        console.log("Signature missing");
-        return res.status(400).json({ message: 'Signature header is missing.' });
+    if (!signature || !timestamp) {
+        return res.status(400).send('Missing Mayar signature headers');
     }
 
-    const calculatedSignature = crypto
+    // Verify the webhook signature
+    const signingPayload = `${timestamp}.${rawBody}`;
+    const expectedSignature = crypto
         .createHmac('sha256', mayarSecretToken)
-        .update(JSON.stringify(body))
+        .update(signingPayload)
         .digest('hex');
 
-    if (calculatedSignature !== signature) {
-        console.log("Invalid signature");
-        return res.status(401).json({ message: 'Invalid signature.' });
+    if (signature !== expectedSignature) {
+        return res.status(403).send('Invalid signature');
     }
 
-    // 2. Process the Webhook Event
-    console.log('Signature verified. Processing event:', body.event);
+    // Process the webhook
+    const event = JSON.parse(rawBody);
 
-    try {
-        if (body.event === 'payment.success') {
-            const { externalId, email } = body.data;
+    if (event.event === 'payment.success') {
+        const userId = event.data.externalId;
 
-            if (!externalId) {
-                console.log("Webhook received without externalId (user UID)");
-                // We can't proceed without the UID, so we acknowledge and stop.
-                return res.status(200).json({ message: 'Webhook received, but no user ID found.' });
-            }
-
-            const userRef = db.collection('users').doc(externalId);
-            const userDoc = await userRef.get();
-
-            if (!userDoc.exists) {
-                console.error(`User with UID ${externalId} not found in Firestore.`);
-                return res.status(404).json({ message: 'User not found.' });
-            }
-
-            // Update the user's status to 'isPro'
-            await userRef.update({ isPro: true });
-
-            console.log(`Successfully upgraded user ${externalId} to Pro.`);
-            return res.status(200).json({ message: 'User successfully upgraded to Pro.' });
+        if (!userId) {
+            console.warn('Webhook received but missing externalId (userId)', event.data);
+            return res.status(200).send('Webhook received, but no userId to process.');
         }
 
-        // Acknowledge other events without taking action
-        res.status(200).json({ message: 'Webhook received and acknowledged.' });
+        try {
+            const userRef = db.collection('users').doc(userId);
+            await userRef.update({ isPro: true });
 
-    } catch (error) {
-        console.error("Error processing webhook:", error);
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-        res.status(500).json({ message: "Internal Server Error", error: errorMessage });
+            console.log(`Successfully upgraded user ${userId} to Pro.`);
+            return res.status(200).json({ message: 'User upgraded successfully' });
+        } catch (error) {
+            console.error('Error upgrading user:', error);
+            return res.status(500).json({ message: 'Error updating user in Firestore.' });
+        }
     }
+
+    res.status(200).json({ message: 'Webhook received' });
 }
