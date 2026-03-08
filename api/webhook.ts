@@ -92,20 +92,19 @@ export default async function handler(
       });
     });
 
-    if (!signature || !timestamp) {
-        console.log("Test webhook without signature");
-        return res.status(200).send('Missing Mayar signature headers');
-    }
+    if (signature && timestamp) {
+        const signingPayload = `${timestamp}.${rawBody}`;
+        const expectedSignature = crypto
+            .createHmac('sha256', mayarWebhookToken)
+            .update(signingPayload)
+            .digest('hex');
 
-    const signingPayload = `${timestamp}.${rawBody}`;
-    const expectedSignature = crypto
-        .createHmac('sha256', mayarWebhookToken)
-        .update(signingPayload)
-        .digest('hex');
-
-    if (signature !== expectedSignature) {
-        console.error('Invalid signature'); // More explicit logging
-        return res.status(403).send('Invalid signature');
+        if (signature !== expectedSignature) {
+            console.error('Invalid signature'); // More explicit logging
+            return res.status(403).send('Invalid signature');
+        }
+    } else {
+        console.log("Webhook received without signature. Processing for simulation purposes.");
     }
 
     const event = JSON.parse(rawBody);
