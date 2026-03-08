@@ -112,29 +112,64 @@ export default async function handler(
     console.log('Mayar event received:', event?.event);
 
     if (SUPPORTED_SUCCESS_EVENTS.has(event.event)) {
-      console.log('Event data received:', JSON.stringify(event.data, null, 2)); // Log the full data object
-      const userId = resolveUserIdFromEvent(event);
+      console.log('Event data received:', JSON.stringify(event.data, null, 2));
+      let userId = resolveUserIdFromEvent(event);
 
-        if (!userId) {
-          console.warn('Webhook received but no externalId/userId could be resolved from event data.');
+      if (!userId) {
+        console.warn('Could not resolve userId directly from externalId or metadata. Attempting fallback via email.');
+        const email = event?.data?.customerEmail;
+
+        if (email) {
+            console.log(`Found customer email: ${email}. Querying Firestore.`);
+            try {
+                let usersQuery = db.collection('users').where('email', '==', email).limit(1);
+                let userSnap = await usersQuery.get();
+
+                if (userSnap.empty) {
+                    console.log(`No user found in 'users' collection with email ${email}. Trying 'Users' collection.`);
+                    usersQuery = db.collection('Users').where('email', '==', email).limit(1);
+                    userSnap = await usersQuery.get();
+                }
+
+                if (!userSnap.empty) {
+                    if (userSnap.size > 1) {
+                        console.error(`CRITICAL: Found multiple users with the same email: ${email}. Aborting upgrade.`);
+                    } else {
+                        userId = userSnap.docs[0].id;
+                        console.log(`Successfully resolved userId via email fallback: ${userId}`);
+                    }
+                } else {
+                    console.error(`No user found in 'users' or 'Users' collections with email: ${email}`);
+                }
+            } catch(queryError) {
+                console.error('Error querying Firestore by email:', queryError);
+                userId = undefined;
+            }
+        } else {
+            console.warn('No customerEmail found in event data for fallback.');
+        }
+      }
+
+      if (!userId) {
+          console.warn('Webhook received but userId could not be resolved by any method.');
           return res.status(200).send('Webhook received, but no userId to process.');
+      }
+
+      console.log(`Final resolved user ID to be upgraded: ${userId}`);
+
+      try {
+        const upgraded = await upgradeUserToPro(userId);
+
+        if (!upgraded) {
+          console.error(`User document ${userId} not found, even after resolving ID. This might indicate a race condition or data inconsistency.`);
+          return res.status(404).json({ message: 'User document not found.' });
         }
 
-        console.log(`Resolved user ID from event: ${userId}`);
-
-        try {
-          const upgraded = await upgradeUserToPro(userId);
-
-          if (!upgraded) {
-            console.error(`User document ${userId} not found in users/Users collections.`);
-            return res.status(404).json({ message: 'User document not found.' });
-          }
-
-          return res.status(200).json({ message: 'User upgraded successfully' });
-        } catch (error) {
-            console.error(`Error upgrading user ${userId}:`, error);
-            return res.status(500).json({ message: 'Error updating user in Firestore.' });
-        }
+        return res.status(200).json({ message: 'User upgraded successfully' });
+      } catch (error) {
+          console.error(`Error upgrading user ${userId}:`, error);
+          return res.status(500).json({ message: 'Error updating user in Firestore.' });
+      }
     }
 
     res.status(200).json({ message: 'Webhook received' });
