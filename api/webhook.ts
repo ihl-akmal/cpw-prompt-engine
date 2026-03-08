@@ -34,6 +34,38 @@ const app = getApps().length === 0
 
 const db = getFirestore(app);
 
+const SUPPORTED_SUCCESS_EVENTS = new Set([
+  'payment.success',
+  'payment.paid',
+  'payment.completed',
+]);
+
+const resolveUserIdFromEvent = (event: any): string | undefined => {
+  return event?.data?.externalId
+    || event?.data?.external_id
+    || event?.data?.metadata?.userId
+    || event?.data?.metadata?.uid;
+};
+
+const upgradeUserToPro = async (userId: string): Promise<boolean> => {
+  const collectionCandidates = ['users', 'Users'];
+
+  for (const collectionName of collectionCandidates) {
+    const userRef = db.collection(collectionName).doc(userId);
+    const userSnap = await userRef.get();
+
+    if (userSnap.exists) {
+      await userRef.update({ isPro: true });
+      console.log(`Successfully upgraded user ${userId} to Pro in collection '${collectionName}'.`);
+      return true;
+    }
+  }
+
+  return false;
+};
+
+
+
 // --- 3. Webhook Handler ---
 export default async function handler(
   req: VercelRequest,
@@ -77,20 +109,25 @@ export default async function handler(
     }
 
     const event = JSON.parse(rawBody);
+    console.log('Mayar event received:', event?.event);
 
-    if (event.event === 'payment.success') {
-        const userId = event.data.externalId;
+    if (SUPPORTED_SUCCESS_EVENTS.has(event.event)) {
+      const userId = resolveUserIdFromEvent(event);
 
         if (!userId) {
-            console.warn('Webhook received but missing externalId (userId)', event.data);
+          console.warn('Webhook received but missing externalId/userId', event.data);
             return res.status(200).send('Webhook received, but no userId to process.');
         }
 
         try {
-            const userRef = db.collection('users').doc(userId);
-            await userRef.update({ isPro: true });
+          const upgraded = await upgradeUserToPro(userId);
 
-            console.log(`Successfully upgraded user ${userId} to Pro.`);
+          if (!upgraded) {
+            console.error(`User document ${userId} not found in users/Users collections.`);
+            return res.status(404).json({ message: 'User document not found.' });
+          }
+
+            
             return res.status(200).json({ message: 'User upgraded successfully' });
         } catch (error) {
             console.error(`Error upgrading user ${userId}:`, error);
