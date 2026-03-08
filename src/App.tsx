@@ -16,6 +16,7 @@ import { auth, googleProvider, isFirebaseConfigured, getUserProfile, type UserPr
 import { signInWithPopup, onAuthStateChanged, signOut, User } from 'firebase/auth';
 import PromptEngine from './components/PromptEngine';
 import BrandVoiceGenerator from './components/BrandVoiceGenerator';
+import About from './components/About';
 
 function App() {
   return (
@@ -110,6 +111,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={userProfile ? <Navigate to="/dashboard" /> : <MainTools onLogin={handleGoogleLogin} />} />
           <Route path="/dashboard" element={userProfile ? <Dashboard userProfile={userProfile} handleLogout={handleLogout} /> : <Navigate to="/" />} />
+          <Route path="/about" element={<About />} />
         </Routes>
       </main>
 
@@ -118,7 +120,6 @@ function AppContent() {
   );
 }
 
-// --- Navbar, MainTools, Footer components remain unchanged ---
 
 const Navbar = ({ userProfile, onLogin }: { userProfile: UserProfile | null, onLogin: () => void }) => {
   const navigate = useNavigate();
@@ -157,7 +158,7 @@ const Navbar = ({ userProfile, onLogin }: { userProfile: UserProfile | null, onL
           ) : (
             <LogIn className="w-4 h-4" />
           )}
-          {userProfile ? 'Dashboard' : 'Login / Register'}
+          {userProfile ? 'Dashboard' : 'Upgrade to Pro'}
         </button>
       </div>
     </nav>
@@ -212,7 +213,11 @@ const MainTools = ({ onLogin }: { onLogin: () => void }) => {
 const Footer = () => (
   <footer className="border-t border-white/5 py-12 mt-20">
     <div className="max-w-7xl mx-auto px-4 text-center">
-      <p className="text-zinc-600 text-sm">© 2024 PROMPTENGINE. All rights reserved.</p>
+       <div className="flex justify-center gap-4 mb-4">
+        <Link to="/" className="text-zinc-400 hover:text-zinc-200">Home</Link>
+        <Link to="/about" className="text-zinc-400 hover:text-zinc-200">About</Link>
+      </div>
+      <p className="text-zinc-600 text-sm">© 2026 PROMPTENGINE. All rights reserved.</p>
     </div>
   </footer>
 );
