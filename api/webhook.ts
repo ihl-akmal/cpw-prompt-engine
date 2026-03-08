@@ -38,6 +38,7 @@ const SUPPORTED_SUCCESS_EVENTS = new Set([
   'payment.success',
   'payment.paid',
   'payment.completed',
+  'payment.received'
 ]);
 
 const resolveUserIdFromEvent = (event: any): string | undefined => {
@@ -49,8 +50,10 @@ const resolveUserIdFromEvent = (event: any): string | undefined => {
 
 const upgradeUserToPro = async (userId: string): Promise<boolean> => {
   const collectionCandidates = ['users', 'Users'];
+  console.log(`Attempting to upgrade user with resolved ID: ${userId}`);
 
   for (const collectionName of collectionCandidates) {
+    console.log(`Checking in collection: '${collectionName}'`);
     const userRef = db.collection(collectionName).doc(userId);
     const userSnap = await userRef.get();
 
@@ -60,18 +63,16 @@ const upgradeUserToPro = async (userId: string): Promise<boolean> => {
       return true;
     }
   }
-
+  
+  console.log(`User document not found for ID: ${userId} in any candidate collections.`);
   return false;
 };
-
-
 
 // --- 3. Webhook Handler ---
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ) {
-    // DEBUGGING: Print all incoming headers
     console.log("Incoming Headers:", req.headers);
 
     if (req.method !== 'POST') {
@@ -100,7 +101,7 @@ export default async function handler(
             .digest('hex');
 
         if (signature !== expectedSignature) {
-            console.error('Invalid signature'); // More explicit logging
+            console.error('Invalid signature');
             return res.status(403).send('Invalid signature');
         }
     } else {
@@ -111,12 +112,15 @@ export default async function handler(
     console.log('Mayar event received:', event?.event);
 
     if (SUPPORTED_SUCCESS_EVENTS.has(event.event)) {
+      console.log('Event data received:', JSON.stringify(event.data, null, 2)); // Log the full data object
       const userId = resolveUserIdFromEvent(event);
 
         if (!userId) {
-          console.warn('Webhook received but missing externalId/userId', event.data);
-            return res.status(200).send('Webhook received, but no userId to process.');
+          console.warn('Webhook received but no externalId/userId could be resolved from event data.');
+          return res.status(200).send('Webhook received, but no userId to process.');
         }
+
+        console.log(`Resolved user ID from event: ${userId}`);
 
         try {
           const upgraded = await upgradeUserToPro(userId);
@@ -126,8 +130,7 @@ export default async function handler(
             return res.status(404).json({ message: 'User document not found.' });
           }
 
-            
-            return res.status(200).json({ message: 'User upgraded successfully' });
+          return res.status(200).json({ message: 'User upgraded successfully' });
         } catch (error) {
             console.error(`Error upgrading user ${userId}:`, error);
             return res.status(500).json({ message: 'Error updating user in Firestore.' });
