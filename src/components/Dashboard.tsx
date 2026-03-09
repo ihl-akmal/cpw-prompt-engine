@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PromptEngine from './PromptEngine';
 import BrandVoiceGenerator from './BrandVoiceGenerator';
 import { LayoutDashboard, Mic2, ExternalLink, Crown, CheckCircle, XCircle } from 'lucide-react';
@@ -17,14 +17,50 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, handleLogout }) => {
     const [isUpgrading, setIsUpgrading] = useState(false);
     const [showPricing, setShowPricing] = useState(false);
 
+    // States for Prompt Engine
     const [promptUsage, setPromptUsage] = useState(0);
+    const [promptRefineUsage, setPromptRefineUsage] = useState(0);
+
+    // States for Brand Voice
     const [brandVoiceUsage, setBrandVoiceUsage] = useState(0);
-    const [refineUsage, setRefineUsage] = useState(0);
+    const [brandVoiceRefineUsage, setBrandVoiceRefineUsage] = useState(0);
+    const [brandVoiceDownloadUsage, setBrandVoiceDownloadUsage] = useState(0);
+
+    // Load all user limits from localStorage on component mount
+    useEffect(() => {
+        setPromptUsage(parseInt(localStorage.getItem('user_prompt_engine_usage') || '0', 10));
+        setPromptRefineUsage(parseInt(localStorage.getItem('user_prompt_refine_usage') || '0', 10));
+        setBrandVoiceUsage(parseInt(localStorage.getItem('user_brand_voice_usage') || '0', 10));
+        setBrandVoiceRefineUsage(parseInt(localStorage.getItem('user_brand_voice_refine_usage') || '0', 10));
+        setBrandVoiceDownloadUsage(parseInt(localStorage.getItem('user_brand_voice_download_usage') || '0', 10));
+    }, []);
+
+    // Handlers that update state and localStorage
+    const handleSetPromptUsage = (count: number) => {
+        localStorage.setItem('user_prompt_engine_usage', count.toString());
+        setPromptUsage(count);
+    };
+    const handleSetPromptRefineUsage = (count: number) => {
+        localStorage.setItem('user_prompt_refine_usage', count.toString());
+        setPromptRefineUsage(count);
+    };
+    const handleSetBrandVoiceUsage = (count: number) => {
+        localStorage.setItem('user_brand_voice_usage', count.toString());
+        setBrandVoiceUsage(count);
+    };
+    const handleSetBrandVoiceRefineUsage = (count: number) => {
+        localStorage.setItem('user_brand_voice_refine_usage', count.toString());
+        setBrandVoiceRefineUsage(count);
+    };
+    const handleSetBrandVoiceDownloadUsage = (count: number) => {
+        localStorage.setItem('user_brand_voice_download_usage', count.toString());
+        setBrandVoiceDownloadUsage(count);
+    };
+
 
     const handleUpgrade = async () => {
         if (!userProfile) return;
 
-        // --- JURY/DEMO MODE ---
         if (userProfile.name && userProfile.name.toLowerCase().includes('juri')) {
             setIsUpgrading(true);
             alert("MODE DEMO JURI: Proses pembayaran akan disimulasikan tanpa tagihan nyata. Klik OK untuk melanjutkan.");
@@ -35,14 +71,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, handleLogout }) => {
             return;
         }
 
-        // --- REAL PAYMENT MODE ---
         setIsUpgrading(true);
         try {
             const payload = {
                 name: userProfile.name || 'valued user',
                 email: userProfile.email || '',
                 userId: userProfile.uid,
-                origin: window.location.origin // Pass the client's origin
+                origin: window.location.origin
             };
 
             if (!payload.email) {
@@ -104,11 +139,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, handleLogout }) => {
                                 </li>
                                 <li className="flex items-center gap-3">
                                     <CheckCircle className="w-5 h-5 text-emerald-500" />
-                                    <span>5 Penggunaan Brand Voice</span>
+                                    <span>3 Penggunaan Brand Voice</span>
                                 </li>
                                 <li className="flex items-center gap-3">
                                     <XCircle className="w-5 h-5 text-zinc-500" />
-                                    <span>Akses Fitur Pro Mendatang</span>
+                                    <span>Fitur Unduh & Refine Terbatas</span>
                                 </li>
                                  <li className="flex items-center gap-3">
                                     <XCircle className="w-5 h-5 text-zinc-500" />
@@ -141,7 +176,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, handleLogout }) => {
                                 </li>
                                 <li className="flex items-center gap-3">
                                     <CheckCircle className="w-5 h-5 text-emerald-500" />
-                                    <span>Akses Fitur Pro Mendatang</span>
+                                    <span>Fitur Unduh & Refine Tanpa Batas</span>
                                 </li>
                                 <li className="flex items-center gap-3">
                                     <CheckCircle className="w-5 h-5 text-emerald-500" />
@@ -239,9 +274,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, handleLogout }) => {
                     <PromptEngine 
                         onUpgrade={() => setShowPricing(true)} 
                         usageCount={promptUsage}
-                        setUsageCount={setPromptUsage}
-                        refineUsageCount={refineUsage}
-                        setRefineUsageCount={setRefineUsage}
+                        setUsageCount={handleSetPromptUsage}
+                        refineUsageCount={promptRefineUsage}
+                        setRefineUsageCount={handleSetPromptRefineUsage}
                         isLoggedIn={true}
                     />
                 </motion.div>
@@ -255,7 +290,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, handleLogout }) => {
                     <BrandVoiceGenerator 
                         onUpgrade={() => setShowPricing(true)}
                         usageCount={brandVoiceUsage}
-                        setUsageCount={setBrandVoiceUsage}
+                        setUsageCount={handleSetBrandVoiceUsage}
+                        refineUsageCount={brandVoiceRefineUsage}
+                        setRefineUsageCount={handleSetBrandVoiceRefineUsage}
+                        downloadUsageCount={brandVoiceDownloadUsage}
+                        setDownloadUsageCount={handleSetBrandVoiceDownloadUsage}
                         isLoggedIn={true}
                     />
                 </motion.div>

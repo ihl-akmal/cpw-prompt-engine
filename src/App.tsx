@@ -34,7 +34,6 @@ function AppContent() {
 
   const refreshUserProfile = useCallback(async (user: User) => {
     try {
-      // Force re-fetch from the server
       const updatedProfile = await getUserProfile(user);
       setUserProfile(updatedProfile);
     } catch (error) {
@@ -66,12 +65,10 @@ function AppContent() {
     if (searchParams.has('payment') && searchParams.get('payment') === 'success') {
       const user = auth.currentUser;
       if (user) {
-        // Give Firestore a moment to be updated by the webhook
         setTimeout(() => {
           refreshUserProfile(user);
         }, 2000); 
       }
-      // Clean up the URL by removing the query parameters
       navigate(location.pathname, { replace: true });
     }
   }, [location, navigate, refreshUserProfile]);
@@ -84,7 +81,11 @@ function AppContent() {
     }
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+    } catch (error: any) {
+      if (error.code === 'auth/popup-closed-by-user') {
+        console.log("Login popup closed by user.");
+        return;
+      }
       console.error("Authentication failed:", error);
       alert("Gagal masuk dengan Google.");
     }
@@ -102,6 +103,10 @@ function AppContent() {
   if (authLoading) {
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-white">Loading...</div>;
   }
+  
+  const mainComponent = userProfile 
+    ? <Dashboard userProfile={userProfile} handleLogout={handleLogout} /> 
+    : <MainTools onLogin={handleGoogleLogin} />;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-emerald-500/30">
@@ -109,8 +114,8 @@ function AppContent() {
       
       <main className="max-w-7xl mx-auto px-4 py-12">
         <Routes>
-          <Route path="/" element={userProfile ? <Navigate to="/dashboard" /> : <MainTools onLogin={handleGoogleLogin} />} />
-          <Route path="/dashboard" element={userProfile ? <Dashboard userProfile={userProfile} handleLogout={handleLogout} /> : <Navigate to="/" />} />
+          <Route path="/" element={userProfile ? <Navigate to="/dashboard" /> : mainComponent} />
+          <Route path="/dashboard" element={userProfile ? mainComponent : <Navigate to="/" />} />
           <Route path="/about" element={<About />} />
         </Routes>
       </main>
@@ -141,7 +146,7 @@ const Navbar = ({ userProfile, onLogin }: { userProfile: UserProfile | null, onL
           </div>
           <div className="flex flex-col leading-tight">
             <span className="font-display font-bold text-base sm:text-xl tracking-tight">
-              PROMPT<span className="text-emerald-500">ENGINE</span>
+              PROMP<span className="text-emerald-500">TOPIA</span>
             </span>
             <span className="font-cursive text-emerald-400 text-xs sm:text-lg -mt-0.5 sm:mt-0">
                 by akmal
@@ -168,6 +173,24 @@ const Navbar = ({ userProfile, onLogin }: { userProfile: UserProfile | null, onL
 const MainTools = ({ onLogin }: { onLogin: () => void }) => {
   const [currentView, setCurrentView] = useState<'prompt' | 'brand-voice'>('prompt');
   
+  const [guestPromptUsage, setGuestPromptUsage] = useState(0);
+  const [guestBrandVoiceUsage, setGuestBrandVoiceUsage] = useState(0);
+
+  useEffect(() => {
+    setGuestPromptUsage(parseInt(localStorage.getItem('guest_prompt_engine_usage') || '0', 10));
+    setGuestBrandVoiceUsage(parseInt(localStorage.getItem('guest_brand_voice_usage') || '0', 10));
+  }, []);
+
+  const handleSetGuestPromptUsage = (count: number) => {
+    localStorage.setItem('guest_prompt_engine_usage', count.toString());
+    setGuestPromptUsage(count);
+  };
+
+  const handleSetGuestBrandVoiceUsage = (count: number) => {
+    localStorage.setItem('guest_brand_voice_usage', count.toString());
+    setGuestBrandVoiceUsage(count);
+  };
+
   return (
     <>
       <div className="md:flex justify-center mb-8">
@@ -198,11 +221,23 @@ const MainTools = ({ onLogin }: { onLogin: () => void }) => {
       <AnimatePresence mode="wait">
         {currentView === 'prompt' ? (
           <motion.div key="prompt">
-            <PromptEngine onUpgrade={onLogin} isLoggedIn={false} usageCount={0} setUsageCount={() => {}} refineUsageCount={0} setRefineUsageCount={() => {}} />
+            <PromptEngine 
+              onUpgrade={onLogin} 
+              isLoggedIn={false} 
+              usageCount={guestPromptUsage} 
+              setUsageCount={handleSetGuestPromptUsage} 
+              refineUsageCount={0}
+              setRefineUsageCount={() => {}} 
+            />
           </motion.div>
         ) : (
           <motion.div key="brand-voice">
-             <BrandVoiceGenerator onUpgrade={onLogin} isLoggedIn={false} usageCount={0} setUsageCount={() => {}} />
+             <BrandVoiceGenerator 
+              onUpgrade={onLogin} 
+              isLoggedIn={false} 
+              usageCount={guestBrandVoiceUsage} 
+              setUsageCount={handleSetGuestBrandVoiceUsage} 
+            />
           </motion.div>
         )}
       </AnimatePresence>

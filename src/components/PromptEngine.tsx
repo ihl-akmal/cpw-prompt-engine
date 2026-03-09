@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Zap, 
   Layers,
@@ -11,7 +11,9 @@ import {
   LogIn,
   Copy,
   Check,
-  Star
+  Star,
+  X,
+  Crown
 } from 'lucide-react';
 import { generateSmartPrompt, generateImprovementQuestion, refinePrompt, type ImprovementQuestion } from '../services/gemini';
 import { cn } from '../utils/cn';
@@ -41,9 +43,20 @@ export default function PromptEngine({
   const [isRefining, setIsRefining] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showLimitPopup, setShowLimitPopup] = useState(false);
+  const [showUpgradePopup, setShowUpgradePopup] = useState(false);
 
   const handleGenerate = async () => {
     if (!lazyPrompt.trim()) return;
+
+    if (isLoggedIn && usageCount >= 5) {
+      setShowUpgradePopup(true);
+      return;
+    }
+    if (!isLoggedIn && usageCount >= 2) {
+      setShowLimitPopup(true);
+      return;
+    }
 
     setIsLoading(true);
     setImprovementData(null);
@@ -55,6 +68,7 @@ export default function PromptEngine({
       const data = await generateImprovementQuestion(lazyPrompt, result);
       setImprovementData(data);
 
+      setUsageCount(usageCount + 1);
     } catch (error: any) {
       console.error("Generation Error:", error);
       if (error.message && error.message.includes('SAFETY')) {
@@ -68,6 +82,15 @@ export default function PromptEngine({
   };
 
   const handleRefine = async (refinement: string) => {
+    if (isLoggedIn && refineUsageCount >= 5) {
+      setShowUpgradePopup(true);
+      return;
+    }
+    if (!isLoggedIn) {
+      onUpgrade();
+      return;
+    }
+
     const finalRefinement = refinement || manualRefinement;
     if (!finalRefinement.trim() || isRefining) return;
     
@@ -80,6 +103,7 @@ export default function PromptEngine({
       
       const data = await generateImprovementQuestion(lazyPrompt, refined);
       setImprovementData(data);
+      setRefineUsageCount(refineUsageCount + 1);
 
     } catch (error: any) {
       console.error("Refinement Error:", error);
@@ -114,21 +138,62 @@ export default function PromptEngine({
       manualRefinement,
       setManualRefinement,
       isRefining,
-      error
+      error,
+      usageCount,
+      refineUsageCount
   }
+  
+  const LimitPopup = ({ isUpgrade = false }) => {
+    const title = isUpgrade ? "Batas Plan Gratis Tercapai" : "Batas Penggunaan Tercapai";
+    const description = isUpgrade 
+      ? "Upgrade ke PRO untuk generasi, refine, dan fitur tanpa batas."
+      : "Buat akun gratis untuk mendapatkan 10 generasi tambahan setiap bulan!";
+    const buttonText = isUpgrade ? "Upgrade ke PRO" : "Sign In / Daftar Gratis";
+    const Icon = isUpgrade ? Crown : LogIn;
 
-  if (isLoggedIn) {
+    const show = isUpgrade ? showUpgradePopup : showLimitPopup;
+    const setShow = isUpgrade ? setShowUpgradePopup : setShowLimitPopup;
+
     return (
-        <div className="flex flex-col gap-8 max-w-4xl mx-auto">
-            {renderInput(renderProps)}
-            {renderOutput(renderProps)}
-            {smartPrompt && improvementData && !error && renderRefinement(renderProps)}
-        </div>
+      <AnimatePresence>
+        {show && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center rounded-2xl z-30"
+          >
+            <div className="relative bg-zinc-900 border border-amber-500/20 p-8 rounded-2xl shadow-2xl">
+              <button onClick={() => setShow(false)} className="absolute top-3 right-3 text-zinc-500 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+              <Zap className="w-10 h-10 text-amber-400 mb-4 mx-auto" />
+              <h3 className="text-xl font-display font-bold mb-2 text-white">{title}</h3>
+              <p className="text-zinc-400 max-w-xs mb-6">{description}</p>
+              <button
+                onClick={() => {
+                  setShow(false);
+                  onUpgrade();
+                }}
+                className="w-full bg-amber-500 text-zinc-950 font-bold px-6 py-3 rounded-xl flex items-center justify-center gap-2 neo-shadow hover:bg-amber-400 transition-colors"
+              >
+                <Icon className='w-5 h-5' />
+                {buttonText}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     );
-  }
+  };
+
+  const parentDivClass = "space-y-12 relative";
 
   return (
-    <div className="space-y-12">
+    <div className={cn(parentDivClass, !isLoggedIn && "relative")}>
+      {!isLoggedIn && <LimitPopup />}
+      {isLoggedIn && <LimitPopup isUpgrade />}
+      
       <div className="text-center">
         <h1 className="text-5xl sm:text-7xl font-display font-bold tracking-tighter mb-6 leading-tight">
           Stop Using <span className="text-zinc-500 line-through decoration-emerald-500/50">Lazy Prompts</span>.<br />
@@ -149,7 +214,7 @@ export default function PromptEngine({
 }
 
 // --- Reusable Render Functions ---
-const renderInput = ({ isLoading, lazyPrompt, setLazyPrompt, handleGenerate }) => (
+const renderInput = ({ isLoading, lazyPrompt, setLazyPrompt, handleGenerate, isLoggedIn, usageCount }) => (
     <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -174,12 +239,16 @@ const renderInput = ({ isLoading, lazyPrompt, setLazyPrompt, handleGenerate }) =
             <Cpu className="w-4 h-4" />
             AI Engine: Gemini 1.5 Flash
         </div>
+        {isLoggedIn 
+            ? <p className='text-xs text-emerald-400'>Sisa Generasi: {5 - usageCount}x</p>
+            : <p className='text-xs text-emerald-400'>Sisa: {2 - usageCount}x</p>
+        }
         <button
             onClick={handleGenerate}
             disabled={isLoading || !lazyPrompt.trim()}
             className={cn(
             "w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold transition-all neo-shadow",
-            isLoading || !lazyPrompt.trim()
+            (isLoading || !lazyPrompt.trim())
                 ? "bg-zinc-800 text-zinc-500 cursor-not-allowed" 
                 : "bg-emerald-500 hover:bg-emerald-400 text-zinc-950"
             )}
@@ -241,7 +310,7 @@ const renderOutput = ({ smartPrompt, copied, copyToClipboard, error, isLoading }
     </motion.div>
 );
 
-const renderRefinement = ({ improvementData, handleRefine, manualRefinement, setManualRefinement, isRefining }) => (
+const renderRefinement = ({ improvementData, handleRefine, manualRefinement, setManualRefinement, isRefining, isLoggedIn, onUpgrade, refineUsageCount }) => (
     <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -255,8 +324,10 @@ const renderRefinement = ({ improvementData, handleRefine, manualRefinement, set
                 </div>
                 <h2 className="font-display font-bold text-xl">Improve Prompt</h2>
             </div>
+            {isLoggedIn && <p className='text-xs text-emerald-400'>Sisa Refine: {5 - refineUsageCount}x</p>}
         </div>
         
+        <div onClick={() => !isLoggedIn && onUpgrade()} className={!isLoggedIn ? 'cursor-pointer' : ''}>
         {improvementData ? (
             <div className="space-y-6">
                 <div>
@@ -266,7 +337,7 @@ const renderRefinement = ({ improvementData, handleRefine, manualRefinement, set
                     <button
                         key={index}
                         onClick={() => handleRefine(option)}
-                        disabled={isRefining}
+                        disabled={isRefining || !isLoggedIn}
                         className="px-4 py-2 bg-white/5 hover:bg-emerald-500/10 border border-white/10 rounded-full text-xs text-zinc-400 hover:text-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {option}
@@ -280,10 +351,10 @@ const renderRefinement = ({ improvementData, handleRefine, manualRefinement, set
                     onChange={(e) => setManualRefinement(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRefine('')}
                     placeholder="Atau ketik jawaban manual..."
-                    disabled={isRefining}
+                    disabled={isRefining || !isLoggedIn}
                     className="w-full bg-zinc-900/50 border border-white/10 rounded-xl py-3 px-4 pr-12 text-sm text-zinc-200 outline-none disabled:opacity-50"
                     />
-                    <button onClick={() => handleRefine('')} disabled={isRefining} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-emerald-500 disabled:opacity-50">
+                    <button onClick={() => handleRefine('')} disabled={isRefining || !isLoggedIn} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-emerald-500 disabled:opacity-50">
                     <ArrowRight className="w-5 h-5" />
                     </button>
                 </div>
@@ -298,6 +369,7 @@ const renderRefinement = ({ improvementData, handleRefine, manualRefinement, set
                 </div>
             </div>
         )}
+        </div>
 
         {isRefining && (
             <div className="absolute inset-0 bg-zinc-950/40 backdrop-blur-[2px] flex items-center justify-center z-20 rounded-2xl">
@@ -305,6 +377,18 @@ const renderRefinement = ({ improvementData, handleRefine, manualRefinement, set
                     <RefreshCcw className="w-5 h-5 animate-spin text-emerald-500" />
                     <span className="font-bold text-sm">Memperbarui Prompt...</span>
                 </div>
+            </div>
+        )}
+
+        {!isLoggedIn && (
+            <div className="absolute inset-0 bg-zinc-950/60 backdrop-blur-sm flex flex-col items-center justify-center z-10 rounded-2xl p-8 text-center">
+                <Star className='w-10 h-10 text-amber-400 mb-4' />
+                <h3 className="font-display text-2xl font-bold mb-2">Unlock Full Power</h3>
+                <p className="text-zinc-400 max-w-sm mb-6">Sign in to refine your prompt, get unlimited generations, and access all features.</p>
+                <button onClick={onUpgrade} className='bg-emerald-500 text-zinc-950 font-bold px-6 py-3 rounded-xl flex items-center gap-2 neo-shadow'>
+                    <LogIn className='w-5 h-5' />
+                    Sign In to Continue
+                </button>
             </div>
         )}
     </motion.div>
