@@ -146,7 +146,7 @@ const Navbar = ({ userProfile, onLogin }: { userProfile: UserProfile | null, onL
           </div>
           <div className="flex flex-col leading-tight">
             <span className="font-display font-bold text-base sm:text-xl tracking-tight">
-              PROMP<span className="text-emerald-500">TOPIA</span>
+              promp<span className="text-emerald-500">topia</span>
             </span>
             <span className="font-cursive text-emerald-400 text-xs sm:text-lg -mt-0.5 sm:mt-0">
                 by akmal
