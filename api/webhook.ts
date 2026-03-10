@@ -1,7 +1,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import crypto from 'crypto';
 
 export const config = {
@@ -48,31 +48,63 @@ const resolveUserIdFromEvent = (event: any): string | undefined => {
     || event?.data?.metadata?.uid;
 };
 
+/**
+ * DIAGNOSTIC VERSION
+ * Upgrades a user to Pro, with extensive logging to identify the point of failure.
+ */
 const upgradeUserToPro = async (userId: string): Promise<boolean> => {
-  const collectionCandidates = ['users', 'Users'];
-  console.log(`Attempting to upgrade user with resolved ID: ${userId}`);
-
-  for (const collectionName of collectionCandidates) {
-    console.log(`Checking in collection: '${collectionName}'`);
-    const userRef = db.collection(collectionName).doc(userId);
-    const userSnap = await userRef.get();
-
-    if (userSnap.exists) {
-      await userRef.update({ isPro: true });
-      console.log(`Successfully upgraded user ${userId} to Pro in collection '${collectionName}'.`);
-      return true;
-    }
-  }
+  console.log(`[UPGRADE_START] Initiating upgrade for user ID: ${userId}`);
   
-  console.log(`User document not found for ID: ${userId} in any candidate collections.`);
-  return false;
+  try {
+    const collectionCandidates = ['users', 'Users'];
+    for (const collectionName of collectionCandidates) {
+      const userRef = db.collection(collectionName).doc(userId);
+      
+      console.log(`[UPGRADE_INFO] Checking for user in collection: '${collectionName}'...`);
+      const userSnap = await userRef.get();
+
+      if (userSnap.exists) {
+        console.log(`[UPGRADE_INFO] User FOUND in '${collectionName}'. Preparing update.`);
+
+        const updatePayload = {
+          isPro: true,
+          plan: 'pro',
+          usage: {
+            brandVoice: { generate: 0, refine: 0, download: 0 },
+            promptEngine: { generate: 0, refine: 0 },
+          },
+          lastUpdate: FieldValue.serverTimestamp(),
+        };
+
+        console.log(`[UPGRADE_PREPARE] Payload is ready. Attempting to write to Firestore now... Payload: ${JSON.stringify(updatePayload)}`);
+
+        await userRef.update(updatePayload);
+
+        console.log(`[UPGRADE_SUCCESS] Firestore write operation completed for user ${userId}.`);
+        return true;
+      } else {
+        console.log(`[UPGRADE_INFO] User NOT found in '${collectionName}'.`);
+      }
+    }
+
+    // This will only be reached if the loop completes without finding the user.
+    console.error(`[UPGRADE_FAIL] User document was not found in any candidate collections for ID: ${userId}. Aborting.`);
+    return false;
+
+  } catch (error) {
+    // This is the most critical log. It will capture any permissions errors.
+    console.error(`[UPGRADE_CRITICAL_ERROR] An unrecoverable error occurred during the Firestore operation for user ${userId}.`, error);
+    return false;
+  }
 };
+
 
 // --- 3. Webhook Handler ---
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
 ) {
+    console.log("--- New Webhook Request ---");
     console.log("Incoming Headers:", req.headers);
 
     if (req.method !== 'POST') {
@@ -105,7 +137,7 @@ export default async function handler(
             return res.status(403).send('Invalid signature');
         }
     } else {
-        console.log("Webhook received without signature. Processing for simulation purposes.");
+        console.log("Webhook received without signature. Continuing for simulation purposes.");
     }
 
     const event = JSON.parse(rawBody);
@@ -116,30 +148,27 @@ export default async function handler(
       let userId = resolveUserIdFromEvent(event);
 
       if (!userId) {
-        console.warn('Could not resolve userId directly from externalId or metadata. Attempting fallback via email.');
+        console.warn('Could not resolve userId from externalId/metadata. Attempting email fallback.');
         const email = event?.data?.customerEmail;
 
         if (email) {
             console.log(`Found customer email: ${email}. Querying Firestore.`);
             try {
-                let usersQuery = db.collection('users').where('email', '==', email).limit(1);
+                // Simplified query for diagnosis
+                const usersQuery = db.collection('users').where('email', '==', email).limit(1);
                 let userSnap = await usersQuery.get();
 
                 if (userSnap.empty) {
-                    console.log(`No user found in 'users' collection with email ${email}. Trying 'Users' collection.`);
-                    usersQuery = db.collection('Users').where('email', '==', email).limit(1);
-                    userSnap = await usersQuery.get();
+                    console.log(`No user found in 'users' with email ${email}. Trying 'Users'.`);
+                    const upperCaseUsersQuery = db.collection('Users').where('email', '==', email).limit(1);
+                    userSnap = await upperCaseUsersQuery.get();
                 }
 
                 if (!userSnap.empty) {
-                    if (userSnap.size > 1) {
-                        console.error(`CRITICAL: Found multiple users with the same email: ${email}. Aborting upgrade.`);
-                    } else {
-                        userId = userSnap.docs[0].id;
-                        console.log(`Successfully resolved userId via email fallback: ${userId}`);
-                    }
+                    userId = userSnap.docs[0].id;
+                    console.log(`Successfully resolved userId via email fallback: ${userId}`);
                 } else {
-                    console.error(`No user found in 'users' or 'Users' collections with email: ${email}`);
+                    console.error(`No user found in any collection with email: ${email}`);
                 }
             } catch(queryError) {
                 console.error('Error querying Firestore by email:', queryError);
@@ -151,26 +180,21 @@ export default async function handler(
       }
 
       if (!userId) {
-          console.warn('Webhook received but userId could not be resolved by any method.');
-          return res.status(200).send('Webhook received, but no userId to process.');
+          console.warn('Webhook processed, but userId could NOT be resolved by any method.');
+          return res.status(400).send('Webhook received, but userId could not be resolved.');
       }
 
-      console.log(`Final resolved user ID to be upgraded: ${userId}`);
+      console.log(`Final resolved user ID for upgrade process: ${userId}`);
 
-      try {
-        const upgraded = await upgradeUserToPro(userId);
+      const upgraded = await upgradeUserToPro(userId);
 
-        if (!upgraded) {
-          console.error(`User document ${userId} not found, even after resolving ID. This might indicate a race condition or data inconsistency.`);
-          return res.status(404).json({ message: 'User document not found.' });
-        }
-
-        return res.status(200).json({ message: 'User upgraded successfully' });
-      } catch (error) {
-          console.error(`Error upgrading user ${userId}:`, error);
-          return res.status(500).json({ message: 'Error updating user in Firestore.' });
+      if (upgraded) {
+        return res.status(200).json({ message: 'User upgrade processed successfully.' });
+      } else {
+        // The detailed error is already logged inside upgradeUserToPro
+        return res.status(500).json({ message: 'User upgrade failed. See function logs for details.' });
       }
     }
 
-    res.status(200).json({ message: 'Webhook received' });
+    res.status(200).json({ message: 'Webhook received, but not a payment success event.' });
 }

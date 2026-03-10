@@ -1,39 +1,40 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Zap, 
-  Layers,
-  Cpu,
-  RefreshCcw,
-  Sparkles,
-  ArrowRight,
-  LogIn,
-  Copy,
-  Check,
-  Star,
-  X,
-  Crown
+  Zap, Layers, Cpu, RefreshCcw, Sparkles, ArrowRight, 
+  LogIn, Copy, Check, Star, X, Crown
 } from 'lucide-react';
 import { generateSmartPrompt, generateImprovementQuestion, refinePrompt, type ImprovementQuestion } from '../services/gemini';
 import { cn } from '../utils/cn';
+import {
+    getUserData,
+    canPerformAction,
+    incrementUsage,
+    PROMPT_ENGINE_LIMITS,
+    PRO_PROMPT_ENGINE_LIMITS,
+    type UserUsage
+} from '../services/userService';
 
 interface PromptEngineProps {
   onUpgrade: () => void;
-  usageCount: number;
-  setUsageCount: (count: number) => void;
+  usageCount: number; // Tetap untuk guest
+  setUsageCount: (count: number) => void; // Tetap untuk guest
   isLoggedIn?: boolean;
-  refineUsageCount?: number;
-  setRefineUsageCount?: (count: number) => void;
+  refineUsageCount?: number; // Akan diganti logikanya
+  setRefineUsageCount?: (count: number) => void; // Akan diganti logikanya
 }
+
+// Limit untuk guest
+const GUEST_GENERATE_LIMIT = 2;
 
 export default function PromptEngine({ 
   onUpgrade, 
   usageCount, 
   setUsageCount, 
   isLoggedIn = false,
-  refineUsageCount = 0,
-  setRefineUsageCount = () => {},
+  refineUsageCount = 0, // Prop ini tidak lagi digunakan untuk user login
+  setRefineUsageCount = () => {}, // Prop ini tidak lagi digunakan untuk user login
 }: PromptEngineProps) {
   const [lazyPrompt, setLazyPrompt] = useState('');
   const [smartPrompt, setSmartPrompt] = useState('');
@@ -45,17 +46,44 @@ export default function PromptEngine({
   const [error, setError] = useState<string | null>(null);
   const [showLimitPopup, setShowLimitPopup] = useState(false);
   const [showUpgradePopup, setShowUpgradePopup] = useState(false);
+  const [showProLimitPopup, setShowProLimitPopup] = useState(false);
+
+  // State baru untuk menyimpan data dari Firestore
+  const [userUsage, setUserUsage] = useState<UserUsage | null>(null);
+  const [isPro, setIsPro] = useState(false);
+
+  const fetchUserData = useCallback(async () => {
+    if (isLoggedIn) {
+      const data = await getUserData();
+      if (data) {
+        setUserUsage(data.usage);
+        setIsPro(data.isPro === true || data.plan === 'pro');
+      }
+    }
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    fetchUserData();
+  }, [isLoggedIn, fetchUserData]);
 
   const handleGenerate = async () => {
     if (!lazyPrompt.trim()) return;
 
-    if (isLoggedIn && usageCount >= 5) {
-      setShowUpgradePopup(true);
-      return;
-    }
-    if (!isLoggedIn && usageCount >= 2) {
-      setShowLimitPopup(true);
-      return;
+    if (isLoggedIn) {
+      const canGenerate = await canPerformAction('promptEngine', 'generate');
+      if (!canGenerate) {
+        if (isPro) {
+            setShowProLimitPopup(true);
+        } else {
+            setShowUpgradePopup(true);
+        }
+        return;
+      }
+    } else {
+      if (usageCount >= GUEST_GENERATE_LIMIT) {
+        setShowLimitPopup(true);
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -68,27 +96,34 @@ export default function PromptEngine({
       const data = await generateImprovementQuestion(lazyPrompt, result);
       setImprovementData(data);
 
-      setUsageCount(usageCount + 1);
+      if (isLoggedIn) {
+        await incrementUsage('promptEngine', 'generate');
+        fetchUserData(); // Refresh kuota
+      } else {
+        setUsageCount(usageCount + 1); // Logika guest
+      }
     } catch (error: any) {
       console.error("Generation Error:", error);
-      if (error.message && error.message.includes('SAFETY')) {
-        setError("Konten yang dihasilkan mungkin tidak aman. Coba ubah input Anda.");
-      } else {
-        setError("Terjadi kesalahan sistem. Tim kami sedang menanganinya.");
-      }
+      setError(error.message.includes('SAFETY') ? "Konten yang dihasilkan mungkin tidak aman. Coba ubah input Anda." : "Terjadi kesalahan sistem. Tim kami sedang menanganinya.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleRefine = async (refinement: string) => {
-    if (isLoggedIn && refineUsageCount >= 5) {
-      setShowUpgradePopup(true);
-      return;
-    }
     if (!isLoggedIn) {
       onUpgrade();
       return;
+    }
+    
+    const canRefine = await canPerformAction('promptEngine', 'refine');
+    if (!canRefine) {
+        if (isPro) {
+            setShowProLimitPopup(true);
+        } else {
+            setShowUpgradePopup(true);
+        }
+        return;
     }
 
     const finalRefinement = refinement || manualRefinement;
@@ -103,15 +138,13 @@ export default function PromptEngine({
       
       const data = await generateImprovementQuestion(lazyPrompt, refined);
       setImprovementData(data);
-      setRefineUsageCount(refineUsageCount + 1);
+      
+      await incrementUsage('promptEngine', 'refine');
+      fetchUserData(); // Refresh kuota
 
     } catch (error: any) {
       console.error("Refinement Error:", error);
-      if (error.message && error.message.includes('SAFETY')) {
-          setError("Konten yang dihasilkan mungkin tidak aman. Coba ubah input Anda.");
-      } else {
-          setError("Gagal melakukan refine. Coba lagi atau ubah instruksi.");
-      }
+      setError(error.message.includes('SAFETY') ? "Konten yang dihasilkan mungkin tidak aman. Coba ubah input Anda." : "Gagal melakukan refine. Coba lagi atau ubah instruksi.");
     } finally {
       setIsRefining(false);
     }
@@ -122,6 +155,13 @@ export default function PromptEngine({
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // Hitung sisa kuota --- PERBAIKAN DI SINI ---
+  const generateLimit = isPro ? PRO_PROMPT_ENGINE_LIMITS.generate : PROMPT_ENGINE_LIMITS.generate;
+  const refineLimit = isPro ? PRO_PROMPT_ENGINE_LIMITS.refine : PROMPT_ENGINE_LIMITS.refine;
+
+  const remainingGenerate = isLoggedIn ? generateLimit - (userUsage?.promptEngine.generate || 0) : GUEST_GENERATE_LIMIT - usageCount;
+  const remainingRefine = isLoggedIn ? refineLimit - (userUsage?.promptEngine.refine || 0) : 0;
 
   const renderProps = {
       isLoading,
@@ -139,6 +179,8 @@ export default function PromptEngine({
       setManualRefinement,
       isRefining,
       error,
+      remainingGenerate,
+      remainingRefine,
       usageCount,
       refineUsageCount
   }
@@ -187,12 +229,41 @@ export default function PromptEngine({
     );
   };
 
+  const ProLimitPopup = () => (
+    <AnimatePresence>
+      {showProLimitPopup && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center rounded-2xl z-30"
+        >
+          <div className="relative bg-zinc-900 border border-amber-500/20 p-8 rounded-2xl shadow-2xl">
+            <button onClick={() => setShowProLimitPopup(false)} className="absolute top-3 right-3 text-zinc-500 hover:text-white transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+            <Zap className="w-10 h-10 text-amber-400 mb-4 mx-auto" />
+            <h3 className="text-xl font-display font-bold mb-2 text-white">Limit Harian Tercapai</h3>
+            <p className="text-zinc-400 max-w-xs mb-6">Limit harian anda telah tercapai, silahkan coba besok lagi.</p>
+            <button
+              onClick={() => setShowProLimitPopup(false)}
+              className="w-full bg-amber-500 text-zinc-950 font-bold px-6 py-3 rounded-xl flex items-center justify-center gap-2 neo-shadow hover:bg-amber-400 transition-colors"
+            >
+              Mengerti
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   const parentDivClass = "space-y-12 relative";
 
   return (
     <div className={cn(parentDivClass, !isLoggedIn && "relative")}>
       {!isLoggedIn && <LimitPopup />}
       {isLoggedIn && <LimitPopup isUpgrade />}
+      {isLoggedIn && <ProLimitPopup />}
       
       <div className="text-center">
         <h1 className="text-5xl sm:text-7xl font-display font-bold tracking-tighter mb-6 leading-tight">
@@ -213,8 +284,8 @@ export default function PromptEngine({
   );
 }
 
-// --- Reusable Render Functions ---
-const renderInput = ({ isLoading, lazyPrompt, setLazyPrompt, handleGenerate, isLoggedIn, usageCount }) => (
+// --- Reusable Render Functions (Modifikasi Tampilan Kuota) ---
+const renderInput = ({ isLoading, lazyPrompt, setLazyPrompt, handleGenerate, isLoggedIn, remainingGenerate }) => (
     <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -240,8 +311,8 @@ const renderInput = ({ isLoading, lazyPrompt, setLazyPrompt, handleGenerate, isL
             AI Engine: Gemini 1.5 Flash
         </div>
         {isLoggedIn 
-            ? <p className='text-xs text-emerald-400'>Sisa Generasi: {5 - usageCount}x</p>
-            : <p className='text-xs text-emerald-400'>Sisa: {2 - usageCount}x</p>
+            ? <p className='text-xs text-emerald-400'>Sisa Generasi: {Math.max(0, remainingGenerate)}x</p>
+            : <p className='text-xs text-emerald-400'>Sisa: {Math.max(0, remainingGenerate)}x</p>
         }
         <button
             onClick={handleGenerate}
@@ -310,7 +381,7 @@ const renderOutput = ({ smartPrompt, copied, copyToClipboard, error, isLoading }
     </motion.div>
 );
 
-const renderRefinement = ({ improvementData, handleRefine, manualRefinement, setManualRefinement, isRefining, isLoggedIn, onUpgrade, refineUsageCount }) => (
+const renderRefinement = ({ improvementData, handleRefine, manualRefinement, setManualRefinement, isRefining, isLoggedIn, onUpgrade, remainingRefine }) => (
     <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -324,7 +395,7 @@ const renderRefinement = ({ improvementData, handleRefine, manualRefinement, set
                 </div>
                 <h2 className="font-display font-bold text-xl">Improve Prompt</h2>
             </div>
-            {isLoggedIn && <p className='text-xs text-emerald-400'>Sisa Refine: {5 - refineUsageCount}x</p>}
+            {isLoggedIn && <p className='text-xs text-emerald-400'>Sisa Refine: {Math.max(0, remainingRefine)}x</p>}
         </div>
         
         <div onClick={() => !isLoggedIn && onUpgrade()} className={!isLoggedIn ? 'cursor-pointer' : ''}>

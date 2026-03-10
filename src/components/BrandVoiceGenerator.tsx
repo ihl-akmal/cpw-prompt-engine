@@ -1,25 +1,20 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Sparkles, 
-  Zap, 
-  Copy, 
-  Check, 
-  ArrowRight, 
-  LogIn,
-  RefreshCcw, 
-  FileText,
-  User,
-  MessageSquare,
-  Download,
-  Plus,
-  Star,
-  X,
-  Crown
+  Sparkles, Zap, Copy, Check, ArrowRight, LogIn, RefreshCcw, 
+  FileText, User, MessageSquare, Download, Plus, Star, X, Crown
 } from 'lucide-react';
 import { generateBrandVoice, refineBrandVoice, generateImprovementQuestion, type ImprovementQuestion } from '../services/gemini';
 import { cn } from '../utils/cn';
+import {
+    getUserData,
+    canPerformAction,
+    incrementUsage,
+    BRAND_VOICE_LIMITS,
+    PRO_BRAND_VOICE_LIMITS,
+    type UserUsage
+} from '../services/userService';
 
 const PRESET_ADJECTIVES = [
   "Menenangkan", "Terpercaya", "Modis", "Energetik", "Minimalis", 
@@ -29,13 +24,13 @@ const PRESET_ADJECTIVES = [
 
 interface BrandVoiceGeneratorProps {
   onUpgrade: () => void;
-  usageCount: number;
-  setUsageCount: (count: number) => void;
+  usageCount: number; // Tetap ada untuk guest
+  setUsageCount: (count: number) => void; // Tetap ada untuk guest
   isLoggedIn?: boolean;
-  refineUsageCount?: number;
-  setRefineUsageCount?: (count: number) => void;
-  downloadUsageCount?: number;
-  setDownloadUsageCount?: (count: number) => void;
+  refineUsageCount?: number; // Akan diganti logikanya untuk user login
+  setRefineUsageCount?: (count: number) => void; // Akan diganti logikanya untuk user login
+  downloadUsageCount?: number; // Akan diganti logikanya untuk user login
+  setDownloadUsageCount?: (count: number) => void; // Akan diganti logikanya untuk user login
 }
 
 export default function BrandVoiceGenerator({ 
@@ -67,6 +62,25 @@ export default function BrandVoiceGenerator({
   const [showDownloadPrompt, setShowDownloadPrompt] = useState(false);
   const [showLimitPopup, setShowLimitPopup] = useState(false);
   const [showUpgradePopup, setShowUpgradePopup] = useState(false);
+  const [showProLimitPopup, setShowProLimitPopup] = useState(false);
+
+  // State baru untuk menyimpan data dari Firestore
+  const [userUsage, setUserUsage] = useState<UserUsage | null>(null);
+  const [isPro, setIsPro] = useState(false);
+
+  const fetchUserData = useCallback(async () => {
+    if (isLoggedIn) {
+      const data = await getUserData();
+      if (data) {
+        setUserUsage(data.usage);
+        setIsPro(data.isPro === true || data.plan === 'pro');
+      }
+    }
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    fetchUserData();
+  }, [isLoggedIn, fetchUserData]);
 
   const toggleAdjective = (adj: string) => {
     if (selectedAdjectives.includes(adj)) {
@@ -86,54 +100,61 @@ export default function BrandVoiceGenerator({
   const handleGenerate = async () => {
     if (!brandName || !industry || !audience || selectedAdjectives.length === 0) return;
 
-    if (isLoggedIn && usageCount >= 3) {
-        setShowUpgradePopup(true);
-        return;
-    }
-    if (!isLoggedIn && usageCount >= 1) {
-        setShowLimitPopup(true);
-        return;
+    if (isLoggedIn) {
+      const canGenerate = await canPerformAction('brandVoice', 'generate');
+      if (!canGenerate) {
+          if (isPro) {
+              setShowProLimitPopup(true);
+          } else {
+              setShowUpgradePopup(true);
+          }
+          return;
+      }
+    } else {
+      // Logika lama untuk guest tetap digunakan
+      if (usageCount >= 1) {
+          setShowLimitPopup(true);
+          return;
+      }
     }
     
     setIsLoading(true);
     setImprovementData(null);
     setError(null);
     try {
-      const result = await generateBrandVoice({
-        name: brandName,
-        industry,
-        audience,
-        adjectives: selectedAdjectives,
-        antiVoice,
-        example
-      });
+      const result = await generateBrandVoice({ name: brandName, industry, audience, adjectives: selectedAdjectives, antiVoice, example });
       setGeneratedVoice(result);
       
       const data = await generateImprovementQuestion(brandName + " " + industry, result);
       setImprovementData(data);
 
-      setUsageCount(usageCount + 1);
+      if (isLoggedIn) {
+        await incrementUsage('brandVoice', 'generate');
+        fetchUserData(); // Refresh data kuota
+      } else {
+        setUsageCount(usageCount + 1); // Logika lama untuk guest
+      }
     } catch (error: any) {
       console.error("Generation Error:", error);
-      if (error.message && error.message.includes('SAFETY')) {
-        setError("Konten yang dihasilkan mungkin tidak aman. Coba ubah input Anda.");
-      } else if (error.message && error.message.includes('TOKEN')) {
-        setError("Input terlalu panjang. Coba perpendek atau upgrade paket untuk batas lebih tinggi.");
-      } else {
-        setError("Terjadi kesalahan sistem. Tim kami sedang menanganinya.");
-      }
+      setError(error.message.includes('SAFETY') ? "Konten yang dihasilkan mungkin tidak aman. Coba ubah input Anda." : "Terjadi kesalahan sistem. Tim kami sedang menanganinya.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleRefine = async (refinement: string) => {
-    if (isLoggedIn && refineUsageCount >= 3) {
-      setShowUpgradePopup(true);
-      return;
-    }
     if (!isLoggedIn) {
         onUpgrade();
+        return;
+    }
+    
+    const canRefine = await canPerformAction('brandVoice', 'refine');
+    if (!canRefine) {
+        if (isPro) {
+            setShowProLimitPopup(true);
+        } else {
+            setShowUpgradePopup(true);
+        }
         return;
     }
 
@@ -149,29 +170,36 @@ export default function BrandVoiceGenerator({
       
       const data = await generateImprovementQuestion(brandName, refined);
       setImprovementData(data);
-      setRefineUsageCount(refineUsageCount + 1);
+      
+      await incrementUsage('brandVoice', 'refine');
+      fetchUserData(); // Refresh data kuota
     } catch (error: any) {
         console.error("Refinement Error:", error);
-        if (error.message && error.message.includes('SAFETY')) {
-            setError("Konten yang dihasilkan mungkin tidak aman. Coba ubah input Anda.");
-        } else {
-            setError("Gagal melakukan refine. Coba lagi atau ubah instruksi.");
-        }
+        setError(error.message.includes('SAFETY') ? "Konten yang dihasilkan mungkin tidak aman. Coba ubah input Anda." : "Gagal melakukan refine. Coba lagi atau ubah instruksi.");
     } finally {
       setIsRefining(false);
     }
   };
 
-  const downloadAsDoc = () => {
-    if (isLoggedIn && downloadUsageCount >= 3) {
-      setShowUpgradePopup(true);
-      return;
-    }
+  const downloadAsDoc = async () => {
     if (!isLoggedIn) {
         setShowDownloadPrompt(true);
         return;
     }
-    setDownloadUsageCount(downloadUsageCount + 1);
+
+    const canDownload = await canPerformAction('brandVoice', 'download');
+    if (!canDownload) {
+        if (isPro) {
+            setShowProLimitPopup(true);
+        } else {
+            setShowUpgradePopup(true);
+        }
+        return;
+    }
+
+    await incrementUsage('brandVoice', 'download');
+    fetchUserData(); // Refresh data kuota
+    
     const content = `
       <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
       <head><meta charset='utf-8'><title>Brand Voice Guide - ${brandName}</title></head>
@@ -199,14 +227,27 @@ export default function BrandVoiceGenerator({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Kalkulasi sisa kuota untuk ditampilkan di UI
+  const generateLimit = isPro ? PRO_BRAND_VOICE_LIMITS.generate : BRAND_VOICE_LIMITS.generate;
+  const refineLimit = isPro ? PRO_BRAND_VOICE_LIMITS.refine : BRAND_VOICE_LIMITS.refine;
+  const downloadLimit = isPro ? PRO_BRAND_VOICE_LIMITS.download : BRAND_VOICE_LIMITS.download;
+
+  const remainingGenerate = isLoggedIn ? generateLimit - (userUsage?.brandVoice.generate || 0) : 1 - usageCount;
+  const remainingRefine = isLoggedIn ? refineLimit - (userUsage?.brandVoice.refine || 0) : 0;
+  const remainingDownload = isLoggedIn ? downloadLimit - (userUsage?.brandVoice.download || 0) : 0;
+
+
   const renderProps = {
     brandName, setBrandName, industry, setIndustry, audience, setAudience, 
     selectedAdjectives, toggleAdjective, customAdjective, setCustomAdjective, 
     addCustomAdjective, antiVoice, setAntiVoice, example, setExample, 
-    handleGenerate, isLoading, isLoggedIn, usageCount,
+    handleGenerate, isLoading, isLoggedIn,
     generatedVoice, copied, copyToClipboard, downloadAsDoc, onUpgrade, error,
     improvementData, handleRefine, manualRefinement, setManualRefinement, isRefining,
-    showDownloadPrompt, setShowDownloadPrompt, refineUsageCount, downloadUsageCount
+    showDownloadPrompt, setShowDownloadPrompt, 
+    // Mengirim sisa kuota yang sudah dihitung
+    usageCount, refineUsageCount, downloadUsageCount,
+    remainingGenerate, remainingRefine, remainingDownload
   };
   
   const LimitPopup = ({ isUpgrade = false }) => {
@@ -253,10 +294,39 @@ export default function BrandVoiceGenerator({
     );
   };
 
+  const ProLimitPopup = () => (
+      <AnimatePresence>
+        {showProLimitPopup && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-zinc-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center rounded-2xl z-30"
+          >
+            <div className="relative bg-zinc-900 border border-amber-500/20 p-8 rounded-2xl shadow-2xl">
+              <button onClick={() => setShowProLimitPopup(false)} className="absolute top-3 right-3 text-zinc-500 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+              <Zap className="w-10 h-10 text-amber-400 mb-4 mx-auto" />
+              <h3 className="text-xl font-display font-bold mb-2 text-white">Limit Harian Tercapai</h3>
+              <p className="text-zinc-400 max-w-xs mb-6">Limit harian anda telah tercapai, silahkan coba besok lagi.</p>
+              <button
+                onClick={() => setShowProLimitPopup(false)}
+                className="w-full bg-amber-500 text-zinc-950 font-bold px-6 py-3 rounded-xl flex items-center justify-center gap-2 neo-shadow hover:bg-amber-400 transition-colors"
+              >
+                Mengerti
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+
   const mainContent = (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start relative">
         {!isLoggedIn && <LimitPopup />}
         {isLoggedIn && <LimitPopup isUpgrade />}
+        {isLoggedIn && <ProLimitPopup />}
         {renderInputForm(renderProps)}
         {renderOutputArea(renderProps)}
     </div>
@@ -280,9 +350,9 @@ export default function BrandVoiceGenerator({
   );
 }
 
-// --- Reusable Render Functions ---
+// --- Reusable Render Functions (Modifikasi Tampilan Kuota) ---
 
-const renderInputForm = ({ brandName, setBrandName, industry, setIndustry, audience, setAudience, selectedAdjectives, toggleAdjective, customAdjective, setCustomAdjective, addCustomAdjective, antiVoice, setAntiVoice, example, setExample, handleGenerate, isLoading, isLoggedIn, usageCount }) => (
+const renderInputForm = ({ brandName, setBrandName, industry, setIndustry, audience, setAudience, selectedAdjectives, toggleAdjective, customAdjective, setCustomAdjective, addCustomAdjective, antiVoice, setAntiVoice, example, setExample, handleGenerate, isLoading, isLoggedIn, remainingGenerate }) => (
     <motion.div 
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
@@ -380,8 +450,8 @@ const renderInputForm = ({ brandName, setBrandName, industry, setIndustry, audie
 
         <div className="flex flex-col items-end gap-3 pt-4 border-t border-white/5">
         {isLoggedIn
-            ? <p className='text-xs text-emerald-400 self-start'>Sisa Generasi: {3 - usageCount}x</p>
-            : <p className='text-xs text-emerald-400 self-start'>Sisa penggunaan gratis: {1 - usageCount}x</p>
+            ? <p className='text-xs text-emerald-400 self-start'>Sisa Generasi: {Math.max(0, remainingGenerate)}x</p>
+            : <p className='text-xs text-emerald-400 self-start'>Sisa penggunaan gratis: {Math.max(0, remainingGenerate)}x</p>
         }
         <button
             onClick={handleGenerate}
@@ -400,7 +470,7 @@ const renderInputForm = ({ brandName, setBrandName, industry, setIndustry, audie
     </motion.div>
 );
 
-const renderOutputArea = ({ generatedVoice, copied, copyToClipboard, downloadAsDoc, isLoggedIn, error, isLoading, showDownloadPrompt, setShowDownloadPrompt, onUpgrade, downloadUsageCount }) => (
+const renderOutputArea = ({ generatedVoice, copied, copyToClipboard, downloadAsDoc, isLoggedIn, error, isLoading, showDownloadPrompt, setShowDownloadPrompt, onUpgrade, remainingDownload }) => (
     <motion.div 
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
@@ -445,7 +515,7 @@ const renderOutputArea = ({ generatedVoice, copied, copyToClipboard, downloadAsD
             </div>
             {generatedVoice && !error && (
                 <div className="flex items-center gap-4">
-                {isLoggedIn && <p className='text-xs text-emerald-400'>Sisa Unduh: {3 - downloadUsageCount}x</p>}
+                {isLoggedIn && <p className='text-xs text-emerald-400'>Sisa Unduh: {Math.max(0, remainingDownload)}x</p>}
                 <div className="flex gap-2">
                   <button
                       onClick={copyToClipboard}
@@ -500,7 +570,7 @@ const renderOutputArea = ({ generatedVoice, copied, copyToClipboard, downloadAsD
     </motion.div>
 );
 
-const renderRefinementSection = ({ improvementData, handleRefine, manualRefinement, setManualRefinement, isRefining, isLoggedIn, onUpgrade, refineUsageCount }) => (
+const renderRefinementSection = ({ improvementData, handleRefine, manualRefinement, setManualRefinement, isRefining, isLoggedIn, onUpgrade, remainingRefine }) => (
     <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -514,7 +584,7 @@ const renderRefinementSection = ({ improvementData, handleRefine, manualRefineme
                 </div>
                 <h2 className="font-display font-bold text-xl">Refine Brand Voice</h2>
             </div>
-            {isLoggedIn && <p className='text-xs text-emerald-400'>Sisa Refine: {3 - refineUsageCount}x</p>}
+            {isLoggedIn && <p className='text-xs text-emerald-400'>Sisa Refine: {Math.max(0, remainingRefine)}x</p>}
         </div>
         
         <div onClick={() => !isLoggedIn && onUpgrade()} className={!isLoggedIn ? 'cursor-pointer' : ''}>

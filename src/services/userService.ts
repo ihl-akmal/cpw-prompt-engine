@@ -1,0 +1,169 @@
+
+import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from "firebase/firestore"; 
+import { db, auth } from './firebase';
+
+// --- Definisi Tipe dan Konstanta ---
+
+export const BRAND_VOICE_LIMITS = {
+  generate: 3,
+  refine: 3,
+  download: 3,
+};
+
+export const PROMPT_ENGINE_LIMITS = {
+  generate: 5,
+  refine: 5,
+};
+
+export const PRO_BRAND_VOICE_LIMITS = {
+  generate: 5,
+  refine: 5,
+  download: 5,
+};
+
+export const PRO_PROMPT_ENGINE_LIMITS = {
+  generate: 10,
+  refine: 10,
+};
+
+export type Feature = 'brandVoice' | 'promptEngine';
+export type Action = 'generate' | 'refine' | 'download';
+
+export interface UserUsage {
+  brandVoice: {
+    generate: number;
+    refine: number;
+    download: number;
+  };
+  promptEngine: {
+    generate: number;
+    refine: number;
+  };
+}
+
+// Tipe data baru yang mengakomodasi field `isPro` dan `plan`
+export interface UserData {
+  plan?: 'free' | 'pro'; // plan adalah sistem baru
+  isPro?: boolean;         // isPro adalah sistem lama Anda
+  usage: UserUsage;
+  lastUpdate: any;
+  // field Anda yang lain bisa ada di sini (email, uid, dll)
+}
+
+// --- Fungsi Utama ---
+
+const getCurrentUserId = (): string | null => {
+  return auth.currentUser ? auth.currentUser.uid : null;
+};
+
+/**
+ * Mendapatkan data pengguna dari Firestore. 
+ * Jika pengguna sudah ada tapi belum punya 'usage', field itu akan ditambahkan.
+ * Jika pengguna belum ada sama sekali, dokumen baru akan dibuat.
+ */
+export const getUserData = async (): Promise<UserData | null> => {
+  const userId = getCurrentUserId();
+  if (!userId) return null;
+
+  const userRef = doc(db, "users", userId);
+  const userSnap = await getDoc(userRef);
+
+  const defaultUsage: UserUsage = {
+    brandVoice: { generate: 0, refine: 0, download: 0 },
+    promptEngine: { generate: 0, refine: 0 },
+  };
+
+  if (userSnap.exists()) {
+    const data = userSnap.data();
+
+    if (!data.usage) {
+      await updateDoc(userRef, {
+        usage: defaultUsage,
+        lastUpdate: serverTimestamp()
+      });
+      return { ...data, usage: defaultUsage } as UserData;
+    }
+    
+    return data as UserData;
+
+  } else {
+    const newUser: UserData = {
+      isPro: false,
+      plan: 'free',
+      usage: defaultUsage,
+      lastUpdate: serverTimestamp(),
+    };
+    await setDoc(userRef, newUser);
+    return newUser;
+  }
+};
+
+/**
+ * Memeriksa apakah pengguna dapat melakukan aksi tertentu berdasarkan status Pro atau Free.
+ * Logika ini telah ditulis ulang untuk kejelasan dan keandalan.
+ */
+export const canPerformAction = async (feature: Feature, action: Action): Promise<boolean> => {
+    const userData = await getUserData();
+    if (!userData) {
+        console.log('Action denied: User not logged in.');
+        return false;
+    }
+
+    const isPro = userData.plan === 'pro' || userData.isPro === true;
+    const usage = userData.usage;
+
+    if (!usage || !usage[feature] || typeof usage[feature][action as keyof typeof usage[feature]] === 'undefined') {
+        console.error(`Action denied: Invalid usage data structure for feature '${feature}'.`);
+        return false;
+    }
+
+    const currentCount = usage[feature][action as keyof typeof usage[feature]];
+    let limit: number | undefined;
+
+    if (isPro) {
+        // --- ATURAN UNTUK PENGGUNA PRO ---
+        if (feature === 'promptEngine') {
+            limit = PRO_PROMPT_ENGINE_LIMITS[action as keyof typeof PRO_PROMPT_ENGINE_LIMITS];
+        } else if (feature === 'brandVoice') {
+            limit = PRO_BRAND_VOICE_LIMITS[action as keyof typeof PRO_BRAND_VOICE_LIMITS];
+        }
+    } else {
+        // --- ATURAN UNTUK PENGGUNA FREE ---
+        if (feature === 'promptEngine') {
+            limit = PROMPT_ENGINE_LIMITS[action as keyof typeof PROMPT_ENGINE_LIMITS];
+        } else if (feature === 'brandVoice') {
+            limit = BRAND_VOICE_LIMITS[action as keyof typeof BRAND_VOICE_LIMITS];
+        }
+    }
+
+    if (typeof limit === 'undefined') {
+        console.error(`Action denied: Limit not defined for feature '${feature}' and action '${action}' for the user plan.`);
+        return false;
+    }
+
+    const canPerform = currentCount < limit;
+    console.log(`User: ${getCurrentUserId()}, Pro: ${isPro}, Feature: ${feature}, Action: ${action}, Count: ${currentCount}, Limit: ${limit}, Allowed: ${canPerform}`);
+
+    return canPerform;
+};
+
+/**
+ * Menambah (increment) jumlah penggunaan untuk sebuah aksi.
+ */
+export const incrementUsage = async (feature: Feature, action: Action): Promise<void> => {
+  const userId = getCurrentUserId();
+  if (!userId) return;
+
+  const userRef = doc(db, "users", userId);
+  const fieldToIncrement = `usage.${feature}.${action}`;
+
+  const docSnap = await getDoc(userRef);
+  if (docSnap.exists()) {
+    await updateDoc(userRef, {
+      [fieldToIncrement]: increment(1),
+      lastUpdate: serverTimestamp(),
+    });
+  } else {
+    console.error(`Gagal increment: Dokumen pengguna ${userId} tidak ditemukan.`);
+  }
+};

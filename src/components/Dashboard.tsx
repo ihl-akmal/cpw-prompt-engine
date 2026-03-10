@@ -135,11 +135,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, handleLogout }) => {
                             <ul className="space-y-4 mt-8 text-zinc-300 flex-grow">
                                 <li className="flex items-center gap-3">
                                     <CheckCircle className="w-5 h-5 text-emerald-500" />
-                                    <span>5 Penggunaan Prompt Engine</span>
+                                    <span>5x Prompt Engine per hari</span>
                                 </li>
                                 <li className="flex items-center gap-3">
                                     <CheckCircle className="w-5 h-5 text-emerald-500" />
-                                    <span>3 Penggunaan Brand Voice</span>
+                                    <span>3x Penggunaan Brand Voice per hari</span>
                                 </li>
                                 <li className="flex items-center gap-3">
                                     <XCircle className="w-5 h-5 text-zinc-500" />
@@ -168,11 +168,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, handleLogout }) => {
                             <ul className="space-y-4 mt-8 text-zinc-300 flex-grow">
                                 <li className="flex items-center gap-3">
                                     <CheckCircle className="w-5 h-5 text-emerald-500" />
-                                    <span>Penggunaan Prompt Engine Tanpa Batas</span>
+                                    <span>10x Prompt Engine per hari</span>
                                 </li>
                                 <li className="flex items-center gap-3">
                                     <CheckCircle className="w-5 h-5 text-emerald-500" />
-                                    <span>Penggunaan Brand Voice Tanpa Batas</span>
+                                    <span>5x Penggunaan Brand Voice per hari</span>
                                 </li>
                                 <li className="flex items-center gap-3">
                                     <CheckCircle className="w-5 h-5 text-emerald-500" />
