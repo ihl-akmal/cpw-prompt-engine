@@ -164,7 +164,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, handleLogout }) => {
                             </div>
                             <h3 className="text-2xl font-bold text-white">Pro</h3>
                             <p className="text-zinc-400 mt-2">Untuk content creator dan marketer profesional.</p>
-                            <div className="text-4xl font-bold mt-6">Rp 99.000 <span className="text-lg font-normal text-zinc-400">/sekali bayar</span></div>
+                            <div className="text-4xl font-bold mt-6">Rp 99.000 <span className="text-lg font-normal text-zinc-400">/bulan</span></div>
                             <ul className="space-y-4 mt-8 text-zinc-300 flex-grow">
                                 <li className="flex items-center gap-3">
                                     <CheckCircle className="w-5 h-5 text-emerald-500" />

@@ -8,7 +8,9 @@ import {
   Mic2,
   LogIn,
   User as UserIcon,
-  Crown
+  Crown,
+  Menu,
+  X
 } from 'lucide-react';
 import { cn } from './utils/cn';
 import Dashboard from './components/Dashboard';
@@ -17,6 +19,7 @@ import { signInWithPopup, onAuthStateChanged, signOut, User } from 'firebase/aut
 import PromptEngine from './components/PromptEngine';
 import BrandVoiceGenerator from './components/BrandVoiceGenerator';
 import About from './components/About';
+import UpgradePage from './components/UpgradePage';
 
 function App() {
   return (
@@ -116,6 +119,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={userProfile ? <Navigate to="/dashboard" /> : mainComponent} />
           <Route path="/dashboard" element={userProfile ? mainComponent : <Navigate to="/" />} />
+          <Route path="/upgrade" element={userProfile ? <Navigate to="/dashboard" /> : <UpgradePage onLogin={handleGoogleLogin} />} />
           <Route path="/about" element={<About />} />
         </Routes>
       </main>
@@ -125,17 +129,23 @@ function AppContent() {
   );
 }
 
-
 const Navbar = ({ userProfile, onLogin }: { userProfile: UserProfile | null, onLogin: () => void }) => {
   const navigate = useNavigate();
-  
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   const handleAuthAction = () => {
     if (userProfile) {
       navigate('/dashboard');
     } else {
       onLogin();
     }
+    setIsMenuOpen(false);
   };
+
+  const handleNavClick = (path: string) => {
+    navigate(path);
+    setIsMenuOpen(false);
+  }
 
   return (
     <nav className="border-b border-white/5 bg-zinc-950/50 backdrop-blur-md sticky top-0 z-50">
@@ -148,24 +158,72 @@ const Navbar = ({ userProfile, onLogin }: { userProfile: UserProfile | null, onL
             <span className="font-display font-bold text-base sm:text-xl tracking-tight">
               promp<span className="text-emerald-500">topia</span>
             </span>
-            <span className="font-cursive text-emerald-400 text-xs sm:text-lg -mt-0.5 sm:mt-0">
+            {/* <span className="font-cursive text-emerald-400 text-xs sm:text-lg -mt-0.5 sm:mt-0">
                 by akmal
-              </span>
+              </span> */}
           </div>
         </Link>
         
-        <button 
-          onClick={handleAuthAction}
-          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-lg transition-all text-xs sm:text-sm neo-shadow flex items-center gap-2"
-        >
-          {userProfile ? (
-            userProfile.isPro ? <Crown className="w-4 h-4 text-amber-400" /> : <UserIcon className="w-4 h-4" />
-          ) : (
-            <LogIn className="w-4 h-4" />
+        {/* Desktop Nav */}
+        <div className="hidden sm:flex items-center gap-4">
+          {!userProfile && (
+            <Link to="/upgrade" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors flex items-center gap-1.5">
+              <Crown className="w-4 h-4 text-amber-400" />
+              <span className="whitespace-nowrap">Upgrade to Pro</span>
+            </Link>
           )}
-          {userProfile ? 'Dashboard' : 'Upgrade to Pro'}
-        </button>
+          <button 
+            onClick={handleAuthAction}
+            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-lg transition-all text-sm neo-shadow flex items-center gap-2"
+          >
+            {userProfile ? (
+              userProfile.isPro ? <Crown className="w-4 h-4 text-amber-400" /> : <UserIcon className="w-4 h-4" />
+            ) : (
+              <LogIn className="w-4 h-4" />
+            )}
+            <span className="whitespace-nowrap">{userProfile ? 'Dashboard' : 'Login/Register'}</span>
+          </button>
+        </div>
+
+        {/* Mobile Nav Button */}
+        <div className="sm:hidden">
+          <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 rounded-md text-zinc-300 hover:text-white hover:bg-white/10">
+            {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
       </div>
+
+      {/* Mobile Menu */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="sm:hidden overflow-hidden"
+          >
+            <div className="pt-2 pb-4 px-4 flex flex-col gap-4">
+              {!userProfile && (
+                <button onClick={() => handleNavClick('/upgrade')} className="text-base font-medium text-zinc-300 hover:text-white transition-colors flex items-center gap-2 p-2 rounded-md hover:bg-white/5">
+                  <Crown className="w-5 h-5 text-amber-400" />
+                  <span>Upgrade to Pro</span>
+                </button>
+              )}
+              <button 
+                onClick={handleAuthAction}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-lg transition-all text-base neo-shadow flex items-center justify-center gap-2"
+              >
+                {userProfile ? (
+                  <UserIcon className="w-5 h-5" />
+                ) : (
+                  <LogIn className="w-5 h-5" />
+                )}
+                <span>{userProfile ? 'Dashboard' : 'Login/Register'}</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </nav>
   );
 }
@@ -252,7 +310,7 @@ const Footer = () => (
         <Link to="/" className="text-zinc-400 hover:text-zinc-200">Home</Link>
         <Link to="/about" className="text-zinc-400 hover:text-zinc-200">About</Link>
       </div>
-      <p className="text-zinc-600 text-sm">© 2026 PROMPTENGINE. All rights reserved.</p>
+      <p className="text-zinc-600 text-sm">© 2026 PROMPTENGINE. Apps architect by <u><a href="https://linkedin.com/in/ihlasulamal98">Ihlasul A'mal</a></u> All rights reserved.</p>
     </div>
   </footer>
 );
