@@ -7,7 +7,7 @@ const About: React.FC = () => {
                 <div>
                     <h1 className="text-3xl font-bold mb-4">Turn Lazy Prompts into Smart Prompts</h1>
                     <p className="mb-4">
-                        Content Prompt Engine adalah sebuah alat bantu canggih yang dirancang untuk membantu pengguna dalam merumuskan dan mengoptimalkan "prompt" untuk berinteraksi dengan model kecerdasan buatan (AI). Dalam dunia AI, prompt adalah instruksi atau pertanyaan yang Anda berikan kepada AI untuk mendapatkan respons yang diinginkan. Kualitas prompt sangat menentukan kualitas output yang dihasilkan oleh AI.
+                        Prompthink sebuah alat bantu canggih yang dirancang untuk membantu pengguna dalam merumuskan dan mengoptimalkan "prompt" untuk berinteraksi dengan model kecerdasan buatan (AI). Dalam dunia AI, prompt adalah instruksi atau pertanyaan yang Anda berikan kepada AI untuk mendapatkan respons yang diinginkan. Kualitas prompt sangat menentukan kualitas output yang dihasilkan oleh AI.
                     </p>
 
                     <p>
