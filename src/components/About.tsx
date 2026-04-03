@@ -25,8 +25,8 @@ const About: React.FC = () => {
                     </ul> */}
                 </div>
                 <div className="relative group">
-                    <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-lg blur opacity-50 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
-                    <div className="relative p-1.5 bg-zinc-900 rounded-lg leading-none">
+                    <div className="absolute -inset-1 bg-gradient-to-r from-rose-500 to-cyan-500 rounded-lg blur opacity-50 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
+                    <div className="relative p-1.5 bg-rose-900 rounded-lg leading-none">
                         <img src="https://plus.unsplash.com/premium_photo-1683120966127-14162cdd0935?q=80&w=663&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" alt="AI and Prompt Engineering" className="rounded-md w-full h-[450px] object-cover" />
                     </div>
                 </div>
