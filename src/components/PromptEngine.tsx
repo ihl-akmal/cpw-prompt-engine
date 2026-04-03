@@ -390,7 +390,7 @@ const renderInput = ({ isLoading, lazyPrompt, setLazyPrompt, handleGenerate, isL
             AI Engine: Gemini 1.5 Flash
         </div>
         {isLoggedIn 
-            ? <p className='text-xs text-rose-600 font-medium'>Sisa Generasi: {Math.max(0, remainingGenerate)}x</p>
+            ? <p className='text-xs text-rose-600 font-medium'>Sisa Kredit: {Math.max(0, remainingGenerate)}x</p>
             : <p className='text-xs text-rose-600 font-medium'>Sisa: {Math.max(0, remainingGenerate)}x</p>
         }
         <button
