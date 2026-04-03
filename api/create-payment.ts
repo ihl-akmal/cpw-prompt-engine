@@ -42,7 +42,7 @@ export default async function handler(
     name: name,
     email: email,
     mobile: "081234567890", 
-    amount: 99000,         
+    amount: 35000,         
     description: "PROMPTENGINE - Upgrade to Pro Account",
     // Redirect directly to the dashboard for a smoother UX
     redirectUrl: `${baseUrl}/dashboard?payment=success`,

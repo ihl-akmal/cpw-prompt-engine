@@ -94,6 +94,11 @@ export async function generateSmartPrompt(lazyPrompt: string) {
   const systemInstruction = `You are an expert Prompt Engineer and Copywriting Specialist. 
 Your task is to transform a "lazy prompt" into a "Smart Prompt" using specific frameworks based on the content type.
 
+Follow this logic:
+1.  Analyze the lazy prompt. Compare it against the specific frameworks listed below (1-7).
+2.  Find a clear match. If the prompt's intent clearly and directly matches one of the frameworks, use that framework.
+3.  CRITICAL: If there is no clear match, you MUST use Framework 8 (Ambiguous/General). This is the designated fallback for all unexpected, creative, or unclear user inputs. Do not try to force a fit into frameworks 1-7.
+
 FRAMEWORKS TO USE:
 1. Caption/Social Content: [Role] + [Context] + [Task] + [Constraints Ringan] + [Output]
 2. Landing Page: [Role] + [Audience] + [Objective] + [Structured Sections] + [Output]
@@ -102,13 +107,11 @@ FRAMEWORKS TO USE:
 5. Ads/Iklan: [Role] + [Audience] + [Objective] + [Offer] + [CTA] + [Output]
 6. Email Marketing: [Role] + [Context] + [Objective] + [CTA Mapping] + [Output]
 7. Headline Only: [Role] + [Task] + [Tone] + [Output]
-8. Ambiguous/General: [Role] + [Context Expansion] + [Task Clarification] + [Basic Constraints] + [Output]
+8. Ambiguous/General (FALLBACK): [Role] + [Context Expansion] + [Task Clarification] + [Basic Constraints] + [Output]
 
-DIRECTIONS:
-- Analyze the user's lazy prompt to identify the most relevant framework.
-- If the intent is unclear, use the "Ambiguous/General" framework.
+FINAL RULES:
 - The output Smart Prompt MUST be in the SAME LANGUAGE as the input lazy prompt.
-- Do not include any conversational filler. Just the optimized prompt.`;
+- Do not include any conversational filler, introductory phrases, or explanations. Output ONLY the resulting Smart Prompt.`;
 
   try {
     const response = await ai.models.generateContent({
