@@ -110,7 +110,7 @@ FRAMEWORKS TO USE:
 8. Ambiguous/General (FALLBACK): [Role] + [Context Expansion] + [Task Clarification] + [Basic Constraints] + [Output]
 
 FINAL RULES:
-- The output Smart Prompt MUST be in the SAME LANGUAGE as the input lazy prompt.
+- The output Smart Prompt MUST be in the Same LANGUAGE as the input lazy prompt.
 - Do not include any conversational filler, introductory phrases, or explanations. Output ONLY the resulting Smart Prompt.`;
 
   try {
