@@ -22,8 +22,8 @@ export const PRO_BRAND_VOICE_LIMITS = {
 };
 
 export const PRO_PROMPT_ENGINE_LIMITS = {
-  generate: 10,
-  refine: 10,
+  generate: 150,
+  refine: 150,
 };
 
 export type Feature = 'brandVoice' | 'promptEngine';
@@ -112,34 +112,33 @@ export const canPerformAction = async (feature: Feature, action: Action): Promis
     const isPro = userData.plan === 'pro' || userData.isPro === true;
     const usage = userData.usage;
 
-    if (!usage || !usage[feature] || typeof usage[feature][action as keyof typeof usage[feature]] === 'undefined') {
-        console.error(`Action denied: Invalid usage data structure for feature '${feature}'.`);
+    const limits = isPro
+        ? {
+            brandVoice: PRO_BRAND_VOICE_LIMITS,
+            promptEngine: PRO_PROMPT_ENGINE_LIMITS,
+        }
+        : {
+            brandVoice: BRAND_VOICE_LIMITS,
+            promptEngine: PROMPT_ENGINE_LIMITS,
+        };
+
+    const featureLimits = limits[feature];
+
+    if (!(action in featureLimits)) {
+        console.error(`Action denied: Action '${action}' is not valid for feature '${feature}'.`);
         return false;
     }
 
-    const currentCount = usage[feature][action as keyof typeof usage[feature]];
-    let limit: number | undefined;
+    const limit = featureLimits[action as keyof typeof featureLimits];
 
-    if (isPro) {
-        // --- ATURAN UNTUK PENGGUNA PRO ---
-        if (feature === 'promptEngine') {
-            limit = PRO_PROMPT_ENGINE_LIMITS[action as keyof typeof PRO_PROMPT_ENGINE_LIMITS];
-        } else if (feature === 'brandVoice') {
-            limit = PRO_BRAND_VOICE_LIMITS[action as keyof typeof PRO_BRAND_VOICE_LIMITS];
-        }
-    } else {
-        // --- ATURAN UNTUK PENGGUNA FREE ---
-        if (feature === 'promptEngine') {
-            limit = PROMPT_ENGINE_LIMITS[action as keyof typeof PROMPT_ENGINE_LIMITS];
-        } else if (feature === 'brandVoice') {
-            limit = BRAND_VOICE_LIMITS[action as keyof typeof BRAND_VOICE_LIMITS];
-        }
-    }
+    const featureUsage = usage?.[feature];
 
-    if (typeof limit === 'undefined') {
-        console.error(`Action denied: Limit not defined for feature '${feature}' and action '${action}' for the user plan.`);
+    if (!featureUsage || typeof (featureUsage as any)[action] !== 'number') {
+        console.error(`Action denied: Invalid or missing usage data for feature '${feature}' and action '${action}'.`);
         return false;
     }
+
+    const currentCount = (featureUsage as any)[action];
 
     const canPerform = currentCount < limit;
     console.log(`User: ${getCurrentUserId()}, Pro: ${isPro}, Feature: ${feature}, Action: ${action}, Count: ${currentCount}, Limit: ${limit}, Allowed: ${canPerform}`);
