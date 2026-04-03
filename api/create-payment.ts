@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { URL } from 'url';
 
 const MAYAR_SECRET_TOKEN = process.env.MAYAR_SECRET_TOKEN;
-const MAYAR_API_URL = 'https://api.mayar.club/hl/v1/payment/create';
+const MAYAR_API_URL = 'https://api.mayar.id/hl/v1/payment/create';
 
 export default async function handler(
   req: VercelRequest,

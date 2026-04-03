@@ -94,10 +94,6 @@ export async function generateSmartPrompt(lazyPrompt: string) {
   const systemInstruction = `You are an expert Prompt Engineer and Copywriting Specialist. 
 Your task is to transform a "lazy prompt" into a "Smart Prompt" using specific frameworks based on the content type.
 
-Follow this logic:
-1.  Analyze the lazy prompt. Compare it against the specific frameworks listed below (1-7).
-2.  Find a clear match. If the prompt's intent clearly and directly matches one of the frameworks, use that framework.
-3.  CRITICAL: If there is no clear match, you MUST use Framework 8 (Ambiguous/General). This is the designated fallback for all unexpected, creative, or unclear user inputs. Do not try to force a fit into frameworks 1-7.
 
 FRAMEWORKS TO USE:
 1. Caption/Social Content: [Role] + [Context] + [Task] + [Constraints Ringan] + [Output]
