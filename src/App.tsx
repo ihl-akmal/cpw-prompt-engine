@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -13,13 +13,15 @@ import {
   X
 } from 'lucide-react';
 import { cn } from './utils/cn';
-import Dashboard from './components/Dashboard';
 import { auth, googleProvider, isFirebaseConfigured, getUserProfile, type UserProfile } from './services/firebase';
 import { signInWithPopup, onAuthStateChanged, signOut, User } from 'firebase/auth';
-import PromptEngine from './components/PromptEngine';
-import BrandVoiceGenerator from './components/BrandVoiceGenerator';
 import About from './components/About';
-import UpgradePage from './components/UpgradePage';
+
+// Lazy load komponen
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const PromptEngine = lazy(() => import('./components/PromptEngine'));
+const BrandVoiceGenerator = lazy(() => import('./components/BrandVoiceGenerator'));
+const UpgradePage = lazy(() => import('./components/UpgradePage'));
 
 function App() {
   return (
@@ -103,8 +105,14 @@ function AppContent() {
     }
   };
 
+  const LoadingFallback = () => (
+    <div className="min-h-screen bg-rose-50 flex items-center justify-center text-gray-800">
+      Memuat Halaman...
+    </div>
+  );
+
   if (authLoading) {
-    return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-white">Loading...</div>;
+    return <LoadingFallback />;
   }
   
   const mainComponent = userProfile 
@@ -112,16 +120,18 @@ function AppContent() {
     : <MainTools onLogin={handleGoogleLogin} />;
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-emerald-500/30">
+    <div className="min-h-screen bg-rose-50 text-gray-800 selection:bg-rose-500/30">
       <Navbar userProfile={userProfile} onLogin={handleGoogleLogin} />
       
       <main className="max-w-7xl mx-auto px-4 py-12">
-        <Routes>
-          <Route path="/" element={userProfile ? <Navigate to="/dashboard" /> : mainComponent} />
-          <Route path="/dashboard" element={userProfile ? mainComponent : <Navigate to="/" />} />
-          <Route path="/upgrade" element={userProfile ? <Navigate to="/dashboard" /> : <UpgradePage onLogin={handleGoogleLogin} />} />
-          <Route path="/about" element={<About />} />
-        </Routes>
+        <Suspense fallback={<div className="text-center py-20">Memuat komponen...</div>}>
+          <Routes>
+            <Route path="/" element={userProfile ? <Navigate to="/dashboard" /> : mainComponent} />
+            <Route path="/dashboard" element={userProfile ? mainComponent : <Navigate to="/" />} />
+            <Route path="/upgrade" element={userProfile ? <Navigate to="/dashboard" /> : <UpgradePage onLogin={handleGoogleLogin} />} />
+            <Route path="/about" element={<About />} />
+          </Routes>
+        </Suspense>
       </main>
 
       <Footer />
@@ -148,33 +158,30 @@ const Navbar = ({ userProfile, onLogin }: { userProfile: UserProfile | null, onL
   }
 
   return (
-    <nav className="border-b border-white/5 bg-zinc-950/50 backdrop-blur-md sticky top-0 z-50">
+    <nav className="border-b border-black/5 bg-rose-50/50 backdrop-blur-md sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <Link to={userProfile ? "/dashboard" : "/"} className="flex items-center gap-2 sm:gap-3">
-          <div className="w-7 h-7 sm:w-8 sm:h-8 bg-emerald-500 rounded-lg flex items-center justify-center shrink-0">
-            <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-950 fill-current" />
+          <div className="w-7 h-7 sm:w-8 sm:h-8 bg-rose-200 rounded-lg flex items-center justify-center shrink-0">
+            <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-rose-800 fill-current" />
           </div>
           <div className="flex flex-col leading-tight">
-            <span className="font-display font-bold text-base sm:text-xl tracking-tight">
-              promp<span className="text-emerald-500">think</span>
+            <span className="font-display font-bold text-base sm:text-xl tracking-tight text-gray-800">
+              promp<span className="text-rose-800">think</span>
             </span>
-            {/* <span className="font-cursive text-emerald-400 text-xs sm:text-lg -mt-0.5 sm:mt-0">
-                by akmal
-              </span> */}
           </div>
         </Link>
         
         {/* Desktop Nav */}
         <div className="hidden sm:flex items-center gap-4">
           {!userProfile && (
-            <Link to="/upgrade" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors flex items-center gap-1.5">
+            <Link to="/upgrade" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-1.5">
               <Crown className="w-4 h-4 text-amber-400" />
               <span className="whitespace-nowrap">Upgrade to Pro</span>
             </Link>
           )}
           <button 
             onClick={handleAuthAction}
-            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-lg transition-all text-sm neo-shadow flex items-center gap-2"
+            className="px-4 py-2 bg-rose-200 text-rose-800 font-bold rounded-lg transition-all text-sm hover:bg-rose-300 flex items-center gap-2"
           >
             {userProfile ? (
               userProfile.isPro ? <Crown className="w-4 h-4 text-amber-400" /> : <UserIcon className="w-4 h-4" />
@@ -187,7 +194,7 @@ const Navbar = ({ userProfile, onLogin }: { userProfile: UserProfile | null, onL
 
         {/* Mobile Nav Button */}
         <div className="sm:hidden">
-          <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 rounded-md text-zinc-300 hover:text-white hover:bg-white/10">
+          <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-black/5">
             {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
         </div>
@@ -204,14 +211,14 @@ const Navbar = ({ userProfile, onLogin }: { userProfile: UserProfile | null, onL
           >
             <div className="pt-2 pb-4 px-4 flex flex-col gap-4">
               {!userProfile && (
-                <button onClick={() => handleNavClick('/upgrade')} className="text-base font-medium text-zinc-300 hover:text-white transition-colors flex items-center gap-2 p-2 rounded-md hover:bg-white/5">
+                <button onClick={() => handleNavClick('/upgrade')} className="text-base font-medium text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-2 p-2 rounded-md hover:bg-black/5">
                   <Crown className="w-5 h-5 text-amber-400" />
                   <span>Upgrade to Pro</span>
                 </button>
               )}
               <button 
                 onClick={handleAuthAction}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-lg transition-all text-base neo-shadow flex items-center justify-center gap-2"
+                className="px-4 py-2 bg-rose-200 text-rose-800 font-bold rounded-lg transition-all text-base hover:bg-rose-300 flex items-center justify-center gap-2"
               >
                 {userProfile ? (
                   <UserIcon className="w-5 h-5" />
@@ -252,12 +259,12 @@ const MainTools = ({ onLogin }: { onLogin: () => void }) => {
   return (
     <>
       <div className="md:flex justify-center mb-8">
-        <div className="flex items-center bg-white/5 rounded-xl p-1 border border-white/10 w-full md:w-auto">
+        <div className="flex items-center bg-white/50 rounded-xl p-1 border border-black/10 w-full md:w-auto shadow-sm">
             <button
               onClick={() => setCurrentView('prompt')}
               className={cn(
                 "flex-1 md:flex-none flex items-center justify-center gap-2 py-2 md:px-4 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all",
-                currentView === 'prompt' ? "bg-emerald-500 text-zinc-950" : "text-zinc-400 hover:text-zinc-200"
+                currentView === 'prompt' ? "bg-rose-200 text-rose-800" : "text-gray-500 hover:text-rose-700"
               )}
             >
               <LayoutDashboard className="w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -267,7 +274,7 @@ const MainTools = ({ onLogin }: { onLogin: () => void }) => {
               onClick={() => setCurrentView('brand-voice')}
               className={cn(
                 "flex-1 md:flex-none flex items-center justify-center gap-2 py-2 md:px-4 md:py-1.5 rounded-lg text-xs md:text-sm font-medium transition-all",
-                currentView === 'brand-voice' ? "bg-emerald-500 text-zinc-950" : "text-zinc-400 hover:text-zinc-200"
+                currentView === 'brand-voice' ? "bg-rose-200 text-rose-800" : "text-gray-500 hover:text-rose-700"
               )}
             >
               <Mic2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
@@ -279,23 +286,27 @@ const MainTools = ({ onLogin }: { onLogin: () => void }) => {
       <AnimatePresence mode="wait">
         {currentView === 'prompt' ? (
           <motion.div key="prompt">
-            <PromptEngine 
-              onUpgrade={onLogin} 
-              isLoggedIn={false} 
-              usageCount={guestPromptUsage} 
-              setUsageCount={handleSetGuestPromptUsage} 
-              refineUsageCount={0}
-              setRefineUsageCount={() => {}} 
-            />
+            <Suspense fallback={<div>Memuat...</div>}>
+              <PromptEngine 
+                onUpgrade={onLogin} 
+                isLoggedIn={false} 
+                usageCount={guestPromptUsage} 
+                setUsageCount={handleSetGuestPromptUsage} 
+                refineUsageCount={0}
+                setRefineUsageCount={() => {}} 
+              />
+            </Suspense>
           </motion.div>
         ) : (
           <motion.div key="brand-voice">
-             <BrandVoiceGenerator 
-              onUpgrade={onLogin} 
-              isLoggedIn={false} 
-              usageCount={guestBrandVoiceUsage} 
-              setUsageCount={handleSetGuestBrandVoiceUsage} 
-            />
+             <Suspense fallback={<div>Memuat...</div>}>
+               <BrandVoiceGenerator 
+                onUpgrade={onLogin} 
+                isLoggedIn={false} 
+                usageCount={guestBrandVoiceUsage} 
+                setUsageCount={handleSetGuestBrandVoiceUsage} 
+              />
+            </Suspense>
           </motion.div>
         )}
       </AnimatePresence>
@@ -304,13 +315,13 @@ const MainTools = ({ onLogin }: { onLogin: () => void }) => {
 }
 
 const Footer = () => (
-  <footer className="border-t border-white/5 py-12 mt-20">
+  <footer className="border-t border-black/5 py-12 mt-20">
     <div className="max-w-7xl mx-auto px-4 text-center">
        <div className="flex justify-center gap-4 mb-4">
-        <Link to="/" className="text-zinc-400 hover:text-zinc-200">Home</Link>
-        <Link to="/about" className="text-zinc-400 hover:text-zinc-200">About</Link>
+        <Link to="/" className="text-gray-500 hover:text-gray-800">Home</Link>
+        <Link to="/about" className="text-gray-500 hover:text-gray-800">About</Link>
       </div>
-      <p className="text-zinc-600 text-sm">© 2026 PROMPTENGINE. Apps architect by <u><a href="https://linkedin.com/in/ihlasulamal98">Ihlasul A'mal</a></u> All rights reserved.</p>
+      <p className="text-gray-400 text-sm">© 2026 Prompthink. Dikembangkan oleh <u className="text-rose-800"><a href="https://grazedu.web.id">Grazedu.</a></u> All rights reserved.</p>
     </div>
   </footer>
 );
