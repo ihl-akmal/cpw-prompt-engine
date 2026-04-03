@@ -22,8 +22,8 @@ export const PRO_BRAND_VOICE_LIMITS = {
 };
 
 export const PRO_PROMPT_ENGINE_LIMITS = {
-  generate: 149,
-  refine: 149,
+  generate: 150,
+  refine: 150,
 };
 
 export type Feature = 'brandVoice' | 'promptEngine';
