@@ -127,10 +127,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, handleLogout }) => {
                             <p className="text-gray-500 mt-2">Untuk mencoba dan penggunaan dasar.</p>
                             <div className="text-4xl font-bold text-gray-800 mt-6">Rp 0</div>
                             <ul className="space-y-4 mt-8 text-gray-700 flex-grow">
-                                <li className="flex items-center gap-3"><CheckCircle className="w-5 h-5 text-rose-500" /><span>5x Prompt Engine per hari</span></li>
-                                <li className="flex items-center gap-3"><CheckCircle className="w-5 h-5 text-rose-500" /><span>3x Penggunaan Brand Voice per hari</span></li>
-                                <li className="flex items-center gap-3"><XCircle className="w-5 h-5 text-gray-400" /><span>Fitur Unduh & Refine Terbatas</span></li>
-                                 <li className="flex items-center gap-3"><XCircle className="w-5 h-5 text-gray-400" /><span>Dukungan Prioritas</span></li>
+                                <li className="flex items-center gap-3"><CheckCircle className="w-5 h-5 text-rose-500" /><span>10 Kredit Prompt Engine</span></li>
+                                                        {/* <li className="flex items-center gap-3"><CheckCircle className="w-5 h-5 text-rose-500" /><span>5 Kredit Refine Prompt Engine</span></li> */}
+                                                        {/* <li className="flex items-center gap-3"><CheckCircle className="w-5 h-5 text-rose-500" /><span>5 Penggunaan Brand Voice</span></li> */}
+                                                        <li className="flex items-center gap-3"><XCircle className="w-5 h-5 text-gray-400" /><span>Akses Fitur Pro Mendatang</span></li>
+                                                        <li className="flex items-center gap-3"><XCircle className="w-5 h-5 text-gray-400" /><span>Dukungan Prioritas</span></li>
                             </ul>
                             <button disabled className="w-full mt-8 py-3 px-6 bg-gray-200 text-gray-400 font-bold rounded-lg cursor-not-allowed">
                                 Paket Saat Ini
@@ -142,12 +143,29 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, handleLogout }) => {
                              <div className="absolute top-0 -translate-y-1/2 left-1/2 -translate-x-1/2"><div className="bg-rose-500 text-white text-xs font-bold px-3 py-1 rounded-full uppercase">Paling Populer</div></div>
                             <h3 className="text-2xl font-bold text-gray-800">Pro</h3>
                             <p className="text-gray-500 mt-2">Untuk content creator dan marketer profesional.</p>
-                            <div className="text-4xl font-bold text-gray-800 mt-6">Rp 99.000 <span className="text-lg font-normal text-gray-500">/bulan</span></div>
+                            <div className="text-4xl font-bold text-gray-800 mt-6">Rp 35.000 <span className="text-lg font-normal text-gray-500"></span></div>
                             <ul className="space-y-4 mt-8 text-gray-700 flex-grow">
-                                <li className="flex items-center gap-3"><CheckCircle className="w-5 h-5 text-rose-500" /><span>10x Prompt Engine per hari</span></li>
-                                <li className="flex items-center gap-3"><CheckCircle className="w-5 h-5 text-rose-500" /><span>5x Penggunaan Brand Voice per hari</span></li>
-                                <li className="flex items-center gap-3"><CheckCircle className="w-5 h-5 text-rose-500" /><span>Fitur Unduh & Refine Tanpa Batas</span></li>
-                                <li className="flex items-center gap-3"><CheckCircle className="w-5 h-5 text-rose-500" /><span>Dukungan Prioritas</span></li>
+                                <li className="flex items-center gap-3">
+                                                            <CheckCircle className="w-5 h-5 text-rose-500" />
+                                                            <span>150 Kredit Prompt Engine</span>
+                                                        </li>
+                                                        {/* <li className="flex items-center gap-3">
+                                                            <CheckCircle className="w-5 h-5 text-rose-500" />
+                                                            <span>5x Penggunaan Brand Voice per hari</span>
+                                                        </li> */}
+                                                        {/* <li className="flex items-center gap-3">
+                                                            <CheckCircle className="w-5 h-5 text-rose-500" />
+                                                            <span>Fitur Unduh & Refine Tanpa Batas</span>
+                                                        </li> */}
+                                                          
+                                                         <li className="flex items-center gap-3">
+                                                            <CheckCircle className="w-5 h-5 text-rose-500" />
+                                                            <span>Akses Fitur Pro Mendatang</span>
+                                                        </li>
+                                                        <li className="flex items-center gap-3">
+                                                            <CheckCircle className="w-5 h-5 text-rose-500" />
+                                                            <span>Dukungan Prioritas</span>
+                                                        </li>
                             </ul>
                             <button 
                                 onClick={handleUpgrade} 
