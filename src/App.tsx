@@ -168,6 +168,7 @@ const Navbar = ({ userProfile, onLogin }: { userProfile: UserProfile | null, onL
             <span className="font-display font-bold text-base sm:text-xl tracking-tight text-gray-800">
               promp<span className="text-rose-800">think</span>
             </span>
+            <span className="text-xs font-semibold text-white bg-rose-800/80 px-1.5 py-0.5 text-center rounded-full">Beta Version</span>
           </div>
         </Link>
         
