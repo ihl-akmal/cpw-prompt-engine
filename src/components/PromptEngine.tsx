@@ -244,15 +244,18 @@ export default function PromptEngine({
       {isLoggedIn && <LimitPopup isUpgrade />}
       {isLoggedIn && <ProLimitPopup />}
       
-      <div className="text-center">
+      {!isLoggedIn && (
+    <div className="text-center">
         <h1 className="text-5xl sm:text-7xl font-display font-bold tracking-tighter mb-6 leading-tight text-gray-800">
-          Stop Using <span className="text-gray-400 line-through decoration-rose-300/50">Lazy Prompts</span>.<br />
-          Start Building <span className="text-rose-800">Smart Content</span>.
+            Stop Using <span className="text-gray-400 line-through decoration-rose-300/50">Lazy Prompts</span>.<br />
+            Start Building <span className="text-rose-800">Smart Content</span>.
         </h1>
         <p className="text-gray-500 text-lg sm:text-xl max-w-2xl mx-auto">
-          Transform your vague ideas into high-performing AI prompts optimized for GPT-4, Claude 3, and Gemini.
+            Transform your vague ideas into high-performing AI prompts optimized for GPT-4, Claude 3, and Gemini.
         </p>
-      </div>
+    </div>
+)}
+
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="space-y-8">
