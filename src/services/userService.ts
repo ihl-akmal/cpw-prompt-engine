@@ -1,5 +1,5 @@
 
-import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from "firebase/firestore"; 
+import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp, collection, addDoc } from "firebase/firestore"; 
 import { db, auth } from './firebase';
 
 // --- Definisi Tipe dan Konstanta ---
@@ -22,7 +22,7 @@ export const PRO_BRAND_VOICE_LIMITS = {
 };
 
 export const PRO_PROMPT_ENGINE_LIMITS = {
-  generate: 150,
+  generate: 450,
   refine: 150,
 };
 
@@ -41,13 +41,18 @@ export interface UserUsage {
   };
 }
 
-// Tipe data baru yang mengakomodasi field `isPro` dan `plan`
 export interface UserData {
-  plan?: 'free' | 'pro'; // plan adalah sistem baru
-  isPro?: boolean;         // isPro adalah sistem lama Anda
+  plan?: 'free' | 'pro';
+  isPro?: boolean;
   usage: UserUsage;
   lastUpdate: any;
-  // field Anda yang lain bisa ada di sini (email, uid, dll)
+}
+
+export interface FeedbackData {
+    lazyPrompt: string;
+    finalPrompt: string; // Ini adalah smartPrompt setelah refine
+    generatedOutput: string;
+    feedbackValue: 'like' | 'dislike';
 }
 
 // --- Fungsi Utama ---
@@ -56,11 +61,6 @@ const getCurrentUserId = (): string | null => {
   return auth.currentUser ? auth.currentUser.uid : null;
 };
 
-/**
- * Mendapatkan data pengguna dari Firestore. 
- * Jika pengguna sudah ada tapi belum punya 'usage', field itu akan ditambahkan.
- * Jika pengguna belum ada sama sekali, dokumen baru akan dibuat.
- */
 export const getUserData = async (): Promise<UserData | null> => {
   const userId = getCurrentUserId();
   if (!userId) return null;
@@ -98,10 +98,6 @@ export const getUserData = async (): Promise<UserData | null> => {
   }
 };
 
-/**
- * Memeriksa apakah pengguna dapat melakukan aksi tertentu berdasarkan status Pro atau Free.
- * Logika ini telah ditulis ulang untuk kejelasan dan keandalan.
- */
 export const canPerformAction = async (feature: Feature, action: Action): Promise<boolean> => {
     const userData = await getUserData();
     if (!userData) {
@@ -146,9 +142,6 @@ export const canPerformAction = async (feature: Feature, action: Action): Promis
     return canPerform;
 };
 
-/**
- * Menambah (increment) jumlah penggunaan untuk sebuah aksi.
- */
 export const incrementUsage = async (feature: Feature, action: Action): Promise<void> => {
   const userId = getCurrentUserId();
   if (!userId) return;
@@ -165,4 +158,23 @@ export const incrementUsage = async (feature: Feature, action: Action): Promise<
   } else {
     console.error(`Gagal increment: Dokumen pengguna ${userId} tidak ditemukan.`);
   }
+};
+
+export const submitFeedback = async (data: FeedbackData): Promise<void> => {
+    const userId = getCurrentUserId();
+    if (!userId) {
+        console.error("Feedback submission failed: User not authenticated.");
+        return;
+    }
+
+    try {
+        await addDoc(collection(db, "feedback"), {
+            userId: userId,
+            timestamp: serverTimestamp(),
+            ...data
+        });
+    } catch (error) {
+        console.error("Error submitting feedback:", error);
+        // Anda bisa menambahkan penanganan error yang lebih baik di sini, misalnya memberi tahu user
+    }
 };
