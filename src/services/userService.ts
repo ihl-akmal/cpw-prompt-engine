@@ -1,5 +1,5 @@
 
-import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from "firebase/firestore"; 
+import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp, collection, addDoc, query, orderBy, limit, getDocs } from "firebase/firestore"; 
 import { db, auth } from './firebase';
 
 // --- Definisi Tipe dan Konstanta ---
@@ -48,6 +48,13 @@ export interface UserData {
   usage: UserUsage;
   lastUpdate: any;
   // field Anda yang lain bisa ada di sini (email, uid, dll)
+}
+
+export interface PromptHistoryItem {
+    id: string;
+    lazyPrompt: string;
+    smartPrompt: string;
+    createdAt: any;
 }
 
 // --- Fungsi Utama ---
@@ -165,4 +172,50 @@ export const incrementUsage = async (feature: Feature, action: Action): Promise<
   } else {
     console.error(`Gagal increment: Dokumen pengguna ${userId} tidak ditemukan.`);
   }
+};
+
+// --- Fungsi Riwayat Prompt ---
+
+/**
+ * Menambahkan entri baru ke riwayat prompt pengguna.
+ */
+export const addPromptToHistory = async (lazyPrompt: string, smartPrompt: string): Promise<void> => {
+    const userId = getCurrentUserId();
+    if (!userId) return;
+
+    if (!lazyPrompt.trim() || !smartPrompt.trim()) return;
+
+    const historyCollection = collection(db, "users", userId, "promptHistory");
+    try {
+        await addDoc(historyCollection, {
+            lazyPrompt,
+            smartPrompt,
+            createdAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error("Error adding document to prompt history: ", error);
+    }
+};
+
+/**
+ * Mengambil riwayat prompt untuk pengguna saat ini.
+ */
+export const getPromptHistory = async (): Promise<PromptHistoryItem[]> => {
+    const userId = getCurrentUserId();
+    if (!userId) return [];
+
+    const historyCollection = collection(db, "users", userId, "promptHistory");
+    const q = query(historyCollection, orderBy("createdAt", "desc"), limit(15));
+
+    try {
+        const querySnapshot = await getDocs(q);
+        const history: PromptHistoryItem[] = [];
+        querySnapshot.forEach((doc) => {
+            history.push({ id: doc.id, ...doc.data() } as PromptHistoryItem);
+        });
+        return history;
+    } catch (error) {
+        console.error("Error fetching prompt history: ", error);
+        return [];
+    }
 };

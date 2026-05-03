@@ -11,6 +11,7 @@ import {
     getUserData,
     canPerformAction,
     incrementUsage,
+    addPromptToHistory,
     PROMPT_ENGINE_LIMITS,
     PRO_PROMPT_ENGINE_LIMITS,
     type UserUsage
@@ -18,14 +19,15 @@ import {
 
 interface PromptEngineProps {
   onUpgrade: () => void;
-  usageCount: number; // Tetap untuk guest
-  setUsageCount: (count: number) => void; // Tetap untuk guest
+  usageCount: number; 
+  setUsageCount: (count: number) => void; 
   isLoggedIn?: boolean;
-  refineUsageCount?: number; // Akan diganti logikanya
-  setRefineUsageCount?: (count: number) => void; // Akan diganti logikanya
+  refineUsageCount?: number; 
+  setRefineUsageCount?: (count: number) => void; 
+  initialLazyPrompt?: string | null;
+  initialSmartPrompt?: string | null;
 }
 
-// Limit untuk guest
 const GUEST_GENERATE_LIMIT = 2;
 
 export default function PromptEngine({ 
@@ -33,11 +35,15 @@ export default function PromptEngine({
   usageCount, 
   setUsageCount, 
   isLoggedIn = false,
-  refineUsageCount = 0, // Prop ini tidak lagi digunakan untuk user login
-  setRefineUsageCount = () => {}, // Prop ini tidak lagi digunakan untuk user login
+  refineUsageCount = 0,
+  setRefineUsageCount = () => {},
+  initialLazyPrompt = null,
+  initialSmartPrompt = null,
 }: PromptEngineProps) {
   const [lazyPrompt, setLazyPrompt] = useState('');
   const [smartPrompt, setSmartPrompt] = useState('');
+  
+  // ... state lainnya tetap sama ...
   const [improvementData, setImprovementData] = useState<ImprovementQuestion | null>(null);
   const [manualRefinement, setManualRefinement] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -47,10 +53,17 @@ export default function PromptEngine({
   const [showLimitPopup, setShowLimitPopup] = useState(false);
   const [showUpgradePopup, setShowUpgradePopup] = useState(false);
   const [showProLimitPopup, setShowProLimitPopup] = useState(false);
-
-  // State baru untuk menyimpan data dari Firestore
   const [userUsage, setUserUsage] = useState<UserUsage | null>(null);
   const [isPro, setIsPro] = useState(false);
+
+  useEffect(() => {
+    if (initialLazyPrompt) {
+        setLazyPrompt(initialLazyPrompt);
+    }
+    if (initialSmartPrompt) {
+        setSmartPrompt(initialSmartPrompt);
+    }
+  }, [initialLazyPrompt, initialSmartPrompt]);
 
   const fetchUserData = useCallback(async () => {
     if (isLoggedIn) {
@@ -72,11 +85,8 @@ export default function PromptEngine({
     if (isLoggedIn) {
       const canGenerate = await canPerformAction('promptEngine', 'generate');
       if (!canGenerate) {
-        if (isPro) {
-            setShowProLimitPopup(true);
-        } else {
-            setShowUpgradePopup(true);
-        }
+        if (isPro) setShowProLimitPopup(true);
+        else setShowUpgradePopup(true);
         return;
       }
     } else {
@@ -98,9 +108,10 @@ export default function PromptEngine({
 
       if (isLoggedIn) {
         await incrementUsage('promptEngine', 'generate');
-        fetchUserData(); // Refresh kuota
+        await addPromptToHistory(lazyPrompt, result);
+        fetchUserData();
       } else {
-        setUsageCount(usageCount + 1); // Logika guest
+        setUsageCount(usageCount + 1);
       }
     } catch (error: any) {
       console.error("Generation Error:", error);
@@ -118,11 +129,8 @@ export default function PromptEngine({
     
     const canRefine = await canPerformAction('promptEngine', 'refine');
     if (!canRefine) {
-        if (isPro) {
-            setShowProLimitPopup(true);
-        } else {
-            setShowUpgradePopup(true);
-        }
+        if (isPro) setShowProLimitPopup(true);
+        else setShowUpgradePopup(true);
         return;
     }
 
@@ -140,7 +148,8 @@ export default function PromptEngine({
       setImprovementData(data);
       
       await incrementUsage('promptEngine', 'refine');
-      fetchUserData(); // Refresh kuota
+      await addPromptToHistory(lazyPrompt, refined);
+      fetchUserData();
 
     } catch (error: any) {
       console.error("Refinement Error:", error);
@@ -236,35 +245,24 @@ export default function PromptEngine({
     </AnimatePresence>
   );
 
-  const parentDivClass = "space-y-12 relative";
-
   return (
-    <div className={cn(parentDivClass, !isLoggedIn && "relative")}>
+    <div className={cn("space-y-8", !isLoggedIn && "relative")}>
       {!isLoggedIn && <LimitPopup />}
       {isLoggedIn && <LimitPopup isUpgrade />}
       {isLoggedIn && <ProLimitPopup />}
-      
-      <div className="text-center">
-        <h1 className="text-5xl sm:text-7xl font-display font-bold tracking-tighter mb-6 leading-tight text-gray-800">
-          Stop Using <span className="text-gray-400 line-through decoration-rose-300/50">Lazy Prompts</span>.<br />
-          Start Building <span className="text-rose-800">Smart Content</span>.
-        </h1>
-        <p className="text-gray-500 text-lg sm:text-xl max-w-2xl mx-auto">
-          Transform your vague ideas into high-performing AI prompts optimized for GPT-4, Claude 3, and Gemini.
-        </p>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="space-y-8">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
-                {renderInput(renderProps)}
-                {renderOutput(renderProps)}
-            </div>
-            <AnimatePresence>
-                {smartPrompt && improvementData && !error && renderRefinement(renderProps)}
-            </AnimatePresence>
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {renderInput(renderProps)}
+        {renderOutput(renderProps)}
       </div>
+      <AnimatePresence>
+        {smartPrompt && improvementData && !error && (
+             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                {renderRefinement(renderProps)}
+            </div>
+        )}
+      </AnimatePresence>
+      
       {!isLoggedIn && renderHowToUse()}
       {!isLoggedIn && renderSecretToBetterAI()}
     </div>
@@ -273,7 +271,7 @@ export default function PromptEngine({
 
 const renderHowToUse = () => (
     <div className="py-12 sm:py-16">
-        <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center">
                 <h2 className="text-3xl font-display font-bold text-gray-800 sm:text-4xl">Cara Mengoptimalkan Prompt Anda</h2>
                 <p className="mt-3 text-lg text-gray-500">Dapatkan prompt kelas profesional dalam hitungan detik dengan tiga langkah sederhana.</p>
