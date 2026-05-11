@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Zap, Layers, Cpu, RefreshCcw, Sparkles, ArrowRight, 
-  LogIn, Copy, Check, Star, X, Crown, Pencil, MessageSquare, ClipboardList, User
+  LogIn, Copy, Check, Star, X, Crown, Pencil, MessageSquare, ClipboardList, User,
+  ThumbsUp, ThumbsDown
 } from 'lucide-react';
 import { generateSmartPrompt, generateImprovementQuestion, refinePrompt, type ImprovementQuestion } from '../services/gemini';
 import { cn } from '../utils/cn';
@@ -11,21 +12,24 @@ import {
     getUserData,
     canPerformAction,
     incrementUsage,
+    submitFeedback, // Impor fungsi baru
     PROMPT_ENGINE_LIMITS,
     PRO_PROMPT_ENGINE_LIMITS,
-    type UserUsage
+    type UserUsage,
+    type FeedbackData
 } from '../services/userService';
+import { auth, addPromptHistory } from '../services/firebase';
+import { useAuthState } from 'react-firebase-hooks/auth';
 
 interface PromptEngineProps {
   onUpgrade: () => void;
-  usageCount: number; // Tetap untuk guest
-  setUsageCount: (count: number) => void; // Tetap untuk guest
+  usageCount: number;
+  setUsageCount: (count: number) => void;
   isLoggedIn?: boolean;
-  refineUsageCount?: number; // Akan diganti logikanya
-  setRefineUsageCount?: (count: number) => void; // Akan diganti logikanya
+  refineUsageCount?: number;
+  setRefineUsageCount?: (count: number) => void;
 }
 
-// Limit untuk guest
 const GUEST_GENERATE_LIMIT = 2;
 
 export default function PromptEngine({ 
@@ -33,8 +37,8 @@ export default function PromptEngine({
   usageCount, 
   setUsageCount, 
   isLoggedIn = false,
-  refineUsageCount = 0, // Prop ini tidak lagi digunakan untuk user login
-  setRefineUsageCount = () => {}, // Prop ini tidak lagi digunakan untuk user login
+  refineUsageCount = 0,
+  setRefineUsageCount = () => {},
 }: PromptEngineProps) {
   const [lazyPrompt, setLazyPrompt] = useState('');
   const [smartPrompt, setSmartPrompt] = useState('');
@@ -47,10 +51,10 @@ export default function PromptEngine({
   const [showLimitPopup, setShowLimitPopup] = useState(false);
   const [showUpgradePopup, setShowUpgradePopup] = useState(false);
   const [showProLimitPopup, setShowProLimitPopup] = useState(false);
-
-  // State baru untuk menyimpan data dari Firestore
   const [userUsage, setUserUsage] = useState<UserUsage | null>(null);
   const [isPro, setIsPro] = useState(false);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState<'like' | 'dislike' | null>(null);
+  const [user] = useAuthState(auth);
 
   const fetchUserData = useCallback(async () => {
     if (isLoggedIn) {
@@ -89,6 +93,7 @@ export default function PromptEngine({
     setIsLoading(true);
     setImprovementData(null);
     setError(null);
+    setFeedbackSubmitted(null); // Reset feedback status on new generation
     try {
       const result = await generateSmartPrompt(lazyPrompt);
       setSmartPrompt(result);
@@ -98,9 +103,12 @@ export default function PromptEngine({
 
       if (isLoggedIn) {
         await incrementUsage('promptEngine', 'generate');
-        fetchUserData(); // Refresh kuota
+        if (user) {
+            await addPromptHistory(user.uid, lazyPrompt, result, data);
+        }
+        fetchUserData();
       } else {
-        setUsageCount(usageCount + 1); // Logika guest
+        setUsageCount(usageCount + 1);
       }
     } catch (error: any) {
       console.error("Generation Error:", error);
@@ -131,6 +139,7 @@ export default function PromptEngine({
     
     setIsRefining(true);
     setError(null);
+    setFeedbackSubmitted(null); // Reset feedback status on new refinement
     try {
       const refined = await refinePrompt(smartPrompt, finalRefinement, lazyPrompt);
       setSmartPrompt(refined);
@@ -140,7 +149,7 @@ export default function PromptEngine({
       setImprovementData(data);
       
       await incrementUsage('promptEngine', 'refine');
-      fetchUserData(); // Refresh kuota
+      fetchUserData();
 
     } catch (error: any) {
       console.error("Refinement Error:", error);
@@ -148,6 +157,21 @@ export default function PromptEngine({
     } finally {
       setIsRefining(false);
     }
+  };
+  
+  const handleFeedback = async (value: 'like' | 'dislike') => {
+    if (feedbackSubmitted) return; // Prevent double submission
+
+    setFeedbackSubmitted(value);
+
+    const feedbackData: FeedbackData = {
+        lazyPrompt: lazyPrompt,
+        finalPrompt: smartPrompt, // Menggunakan smartPrompt yang ada di state
+        generatedOutput: smartPrompt, // Output yang dinilai adalah smartPrompt itu sendiri
+        feedbackValue: value,
+    };
+    
+    await submitFeedback(feedbackData);
   };
 
   const copyToClipboard = () => {
@@ -166,7 +190,8 @@ export default function PromptEngine({
       isLoading, lazyPrompt, setLazyPrompt, handleGenerate, isLoggedIn,
       smartPrompt, copied, copyToClipboard, onUpgrade, improvementData,
       handleRefine, manualRefinement, setManualRefinement, isRefining, error,
-      remainingGenerate, remainingRefine, usageCount, refineUsageCount
+      remainingGenerate, remainingRefine, usageCount, refineUsageCount,
+      handleFeedback, feedbackSubmitted // Pass new props
   }
   
   const LimitPopup = ({ isUpgrade = false }) => {
@@ -273,6 +298,8 @@ export default function PromptEngine({
     </div>
   );
 }
+
+// ... (sisa komponen renderHowToUse, renderSecretToBetterAI, renderInput tetap sama)
 
 const renderHowToUse = () => (
     <div className="py-12 sm:py-16">
@@ -413,7 +440,7 @@ const renderInput = ({ isLoading, lazyPrompt, setLazyPrompt, handleGenerate, isL
     </motion.div>
 );
 
-const renderOutput = ({ smartPrompt, copied, copyToClipboard, error, isLoading }) => (
+const renderOutput = ({ smartPrompt, copied, copyToClipboard, error, isLoading, isLoggedIn, handleFeedback, feedbackSubmitted }) => (
     <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -460,6 +487,38 @@ const renderOutput = ({ smartPrompt, copied, copyToClipboard, error, isLoading }
             </div>
         )}
         </div>
+        
+        {isLoggedIn && smartPrompt && !error && (
+            <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-end gap-2">
+                <p className="text-xs text-gray-500 mr-2">
+                    {feedbackSubmitted ? "Thank you for your feedback!" : "Was this result helpful?"}
+                </p>
+                <button 
+                    onClick={() => handleFeedback('like')} 
+                    disabled={!!feedbackSubmitted}
+                    className={cn(
+                        "p-2 rounded-full transition-colors",
+                        feedbackSubmitted === 'like' 
+                            ? "bg-green-100 text-green-600"
+                            : "text-gray-400 hover:bg-green-100 hover:text-green-600 disabled:hover:bg-transparent"
+                    )}
+                >
+                    <ThumbsUp className="w-4 h-4" />
+                </button>
+                <button 
+                    onClick={() => handleFeedback('dislike')} 
+                    disabled={!!feedbackSubmitted}
+                    className={cn(
+                        "p-2 rounded-full transition-colors",
+                        feedbackSubmitted === 'dislike'
+                            ? "bg-red-100 text-red-600"
+                            : "text-gray-400 hover:bg-red-100 hover:text-red-600 disabled:hover:bg-transparent"
+                    )}
+                >
+                    <ThumbsDown className="w-4 h-4" />
+                </button>
+            </div>
+        )}
     </motion.div>
 );
 

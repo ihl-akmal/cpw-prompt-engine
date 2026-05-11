@@ -2,7 +2,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, type User } from "firebase/auth";
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc, collection, addDoc, serverTimestamp, updateDoc, increment } from "firebase/firestore";
 
 // Read credentials from Vite's environment variables
 export const firebaseConfig = {
@@ -58,4 +58,49 @@ export const getUserProfile = async (user: User): Promise<UserProfile> => {
     await setDoc(userRef, newUserProfile);
     return newUserProfile;
   }
+};
+
+export const submitFeedbackToFirestore = async (feedbackData: any) => {
+    try {
+        await addDoc(collection(db, "feedback"), {
+            ...feedbackData,
+            createdAt: serverTimestamp()
+        });
+        console.log("Feedback submitted successfully");
+    } catch (error) {
+        console.error("Error submitting feedback:", error);
+        throw error;
+    }
+};
+
+export const incrementUsage = async (feature: 'promptEngine' | 'brandVoice', action: 'generate' | 'improve') => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const userRef = doc(db, 'users', user.uid);
+    const fieldToIncrement = `usage.${feature}.${action}`;
+
+    try {
+        await updateDoc(userRef, {
+            [fieldToIncrement]: increment(1)
+        });
+    } catch (error) {
+        console.error(`Error incrementing usage for ${feature}.${action}:`, error);
+    }
+};
+
+export const addPromptHistory = async (userId: string, lazyPrompt: string, smartPrompt: string, improvementData: any) => {
+    if (!userId) return;
+    try {
+        await addDoc(collection(db, "promptHistory"), {
+            userId: userId,
+            lazyPrompt: lazyPrompt,
+            smartPrompt: smartPrompt,
+            improvementData: improvementData,
+            createdAt: serverTimestamp(),
+            platform: 'web'
+        });
+    } catch (error) {
+        console.error("Error adding document to promptHistory: ", error);
+    }
 };

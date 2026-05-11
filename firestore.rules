@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Aturan untuk Koleksi Pengguna (users)
+    // Setiap pengguna hanya dapat mengakses dokumen mereka sendiri.
+    match /users/{userId} {
+     allow read, update, write: if request.auth != null && request.auth.uid == userId;
+   }
+
+    // Aturan untuk Koleksi Feedback
+    // - Hanya pengguna yang terotentikasi yang dapat membuat feedback baru.
+    // - Tidak ada yang diizinkan untuk membaca, memperbarui, atau menghapus feedback
+    //   untuk memastikan integritas data dan mencegah bias.
+    match /feedback/{feedbackId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if false;
+    }
+
+    // Aturan untuk Koleksi Riwayat Prompt (promptHistory)
+    // - Hanya pengguna yang terotentikasi yang dapat membuat riwayat mereka sendiri.
+    // - Tidak ada yang bisa membaca, memperbarui, atau menghapus riwayat dari sisi klien.
+    //   Ini untuk memastikan data hanya bisa diakses melalui Firebase Console.
+    match /promptHistory/{historyId} {
+        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+        allow read, update, delete: if false;
+    }
+  }
+}
