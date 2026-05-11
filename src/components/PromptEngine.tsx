@@ -12,13 +12,12 @@ import {
     getUserData,
     canPerformAction,
     incrementUsage,
-    submitFeedback, // Impor fungsi baru
     PROMPT_ENGINE_LIMITS,
     PRO_PROMPT_ENGINE_LIMITS,
     type UserUsage,
     type FeedbackData
 } from '../services/userService';
-import { auth, addPromptHistory } from '../services/firebase';
+import { auth, addPromptHistory, submitFeedbackToFirestore } from '../services/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
 
 interface PromptEngineProps {
@@ -104,7 +103,7 @@ export default function PromptEngine({
       if (isLoggedIn) {
         await incrementUsage('promptEngine', 'generate');
         if (user) {
-            await addPromptHistory(user.uid, lazyPrompt, result, data);
+            await addPromptHistory(lazyPrompt, result, data);
         }
         fetchUserData();
       } else {
@@ -171,7 +170,7 @@ export default function PromptEngine({
         feedbackValue: value,
     };
     
-    await submitFeedback(feedbackData);
+    await submitFeedbackToFirestore(feedbackData);
   };
 
   const copyToClipboard = () => {

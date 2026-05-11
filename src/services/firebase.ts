@@ -61,9 +61,16 @@ export const getUserProfile = async (user: User): Promise<UserProfile> => {
 };
 
 export const submitFeedbackToFirestore = async (feedbackData: any) => {
+    const user = auth.currentUser;
+    if (!user) {
+        console.error("Error: No authenticated user to submit feedback.");
+        return;
+    }
+    
     try {
         await addDoc(collection(db, "feedback"), {
             ...feedbackData,
+            userId: user.uid, // <--- PERBAIKAN: Menambahkan ID pengguna yang login
             createdAt: serverTimestamp()
         });
         console.log("Feedback submitted successfully");
@@ -89,11 +96,16 @@ export const incrementUsage = async (feature: 'promptEngine' | 'brandVoice', act
     }
 };
 
-export const addPromptHistory = async (userId: string, lazyPrompt: string, smartPrompt: string, improvementData: any) => {
-    if (!userId) return;
+export const addPromptHistory = async (lazyPrompt: string, smartPrompt: string, improvementData: any) => {
+    const user = auth.currentUser;
+    if (!user) {
+        console.error("Error: No authenticated user to add prompt history.");
+        return;
+    }
+    
     try {
         await addDoc(collection(db, "promptHistory"), {
-            userId: userId,
+            userId: user.uid, // <--- PERBAIKAN: Menggunakan ID pengguna yang sudah login
             lazyPrompt: lazyPrompt,
             smartPrompt: smartPrompt,
             improvementData: improvementData,
