@@ -19,6 +19,7 @@ import {
 } from '../services/userService';
 import { auth, addPromptHistory, submitFeedbackToFirestore } from '../services/firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
+import OpenWith from './OpenWith'; // Import the new component
 
 interface PromptEngineProps {
   onUpgrade: () => void;
@@ -46,6 +47,7 @@ export default function PromptEngine({
   const [isLoading, setIsLoading] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showOpenWith, setShowOpenWith] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showLimitPopup, setShowLimitPopup] = useState(false);
   const [showUpgradePopup, setShowUpgradePopup] = useState(false);
@@ -176,7 +178,11 @@ export default function PromptEngine({
   const copyToClipboard = () => {
     navigator.clipboard.writeText(smartPrompt);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setShowOpenWith(true);
+    setTimeout(() => {
+        setCopied(false);
+        setShowOpenWith(false);
+    }, 5000); // Hide after 5 seconds
   };
 
   const generateLimit = isPro ? PRO_PROMPT_ENGINE_LIMITS.generate : PROMPT_ENGINE_LIMITS.generate;
@@ -190,7 +196,7 @@ export default function PromptEngine({
       smartPrompt, copied, copyToClipboard, onUpgrade, improvementData,
       handleRefine, manualRefinement, setManualRefinement, isRefining, error,
       remainingGenerate, remainingRefine, usageCount, refineUsageCount,
-      handleFeedback, feedbackSubmitted // Pass new props
+      handleFeedback, feedbackSubmitted, showOpenWith // Pass new props
   }
   
   const LimitPopup = ({ isUpgrade = false }) => {
@@ -439,7 +445,7 @@ const renderInput = ({ isLoading, lazyPrompt, setLazyPrompt, handleGenerate, isL
     </motion.div>
 );
 
-const renderOutput = ({ smartPrompt, copied, copyToClipboard, error, isLoading, isLoggedIn, handleFeedback, feedbackSubmitted }) => (
+const renderOutput = ({ smartPrompt, copied, copyToClipboard, error, isLoading, isLoggedIn, handleFeedback, feedbackSubmitted, showOpenWith }) => (
     <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -454,13 +460,24 @@ const renderOutput = ({ smartPrompt, copied, copyToClipboard, error, isLoading, 
             <h2 className="font-display font-bold text-xl text-gray-800">Smart Prompt Result</h2>
         </div>
         {smartPrompt && !error && (
-            <button
-            onClick={copyToClipboard}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 hover:text-rose-600 flex items-center gap-2 text-sm"
-            >
-            {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-            {copied ? 'Copied!' : 'Copy'}
-            </button>
+            <div className="relative">
+                <button
+                    onClick={copyToClipboard}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 hover:text-rose-600 flex items-center gap-2 text-sm"
+                >
+                    {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                    {copied ? 'Copied!' : 'Copy'}
+                </button>
+                {showOpenWith && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="absolute top-full right-0 mt-2 z-10"
+                    >
+                        <OpenWith />
+                    </motion.div>
+                )}
+            </div>
         )}
         </div>
 
