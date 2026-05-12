@@ -71,6 +71,8 @@ export const submitFeedbackToFirestore = async (feedbackData: any) => {
         await addDoc(collection(db, "feedback"), {
             ...feedbackData,
             userId: user.uid, // <--- PERBAIKAN: Menambahkan ID pengguna yang login
+            userEmail: user.email,
+            userName: user.displayName,
             createdAt: serverTimestamp()
         });
         console.log("Feedback submitted successfully");
@@ -106,6 +108,8 @@ export const addPromptHistory = async (lazyPrompt: string, smartPrompt: string, 
     try {
         await addDoc(collection(db, "promptHistory"), {
             userId: user.uid, // <--- PERBAIKAN: Menggunakan ID pengguna yang sudah login
+            userEmail: user.email,
+            userName: user.displayName,
             lazyPrompt: lazyPrompt,
             smartPrompt: smartPrompt,
             improvementData: improvementData,
